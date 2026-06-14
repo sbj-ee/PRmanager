@@ -1,5 +1,7 @@
 # prmanager (`prm`)
 
+[![CI](https://github.com/sbj-ee/PRmanager/actions/workflows/ci.yml/badge.svg)](https://github.com/sbj-ee/PRmanager/actions/workflows/ci.yml)
+
 A command-line manager for **GitHub pull requests**, backed by a local **SQLite**
 database. Track repositories, sync their PRs offline, and layer on your own
 review status, notes, and tags.
