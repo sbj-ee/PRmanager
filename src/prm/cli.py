@@ -7,6 +7,7 @@ from typing import Optional
 
 import typer
 from rich.console import Console
+from rich.markup import escape
 from rich.panel import Panel
 from rich.table import Table
 
@@ -249,7 +250,8 @@ def list_prs(
     for r in rows:
         state_label = "merged" if r["merged"] else r["state"]
         state_style = "blue" if r["merged"] else STATE_STYLE.get(r["state"], "white")
-        title = r["title"] or ""
+        # PR titles/authors/tags are untrusted; escape Rich markup in them.
+        title = escape(r["title"] or "")
         if r["draft"]:
             title = f"[dim](draft)[/] {title}"
         if r["note_count"]:
@@ -259,10 +261,10 @@ def list_prs(
             str(r["number"]),
             r["repo"],
             title,
-            r["author"] or "",
+            escape(r["author"] or ""),
             f"[{state_style}]{state_label}[/]",
             f"[{REVIEW_STYLE.get(review_status, 'white')}]{review_status}[/]",
-            r["tags"] or "",
+            escape(r["tags"] or ""),
         )
     console.print(table)
 
@@ -279,26 +281,27 @@ def show(
         tags = db.list_tags(conn, pr["id"])
 
     state_label = "merged" if pr["merged"] else pr["state"]
-    header = f"[bold]#{pr['number']}[/] {pr['title']}"
+    # Escape untrusted PR fields so Rich doesn't parse '[...]' as markup.
+    header = f"[bold]#{pr['number']}[/] {escape(pr['title'] or '')}"
     meta = (
-        f"[cyan]{pr['repo']}[/]  ·  by [magenta]{pr['author']}[/]  ·  "
+        f"[cyan]{escape(pr['repo'])}[/]  ·  by [magenta]{escape(pr['author'] or '')}[/]  ·  "
         f"{state_label}  ·  review: {pr['review_status']}\n"
         f"[dim]{pr['url']}[/]\n"
         f"[dim]created {pr['created_at']} · updated {pr['updated_at']}[/]"
     )
     if tags:
-        meta += f"\ntags: [blue]{', '.join(tags)}[/]"
+        meta += f"\ntags: [blue]{escape(', '.join(tags))}[/]"
     console.print(Panel(meta, title=header, expand=False))
 
     if pr["body"]:
-        console.print(Panel(pr["body"], title="Description", expand=False))
+        console.print(Panel(escape(pr["body"]), title="Description", expand=False))
 
     if notes:
         note_table = Table(title="Notes", show_header=True)
         note_table.add_column("When", style="dim")
         note_table.add_column("Note")
         for n in notes:
-            note_table.add_row(n["created_at"], n["body"])
+            note_table.add_row(n["created_at"], escape(n["body"]))
         console.print(note_table)
 
 

@@ -66,6 +66,25 @@ def test_note_tag_review_flow():
     assert "approved" in res.stdout
 
 
+def test_renders_markup_like_content_without_crashing():
+    # PR fields are untrusted: brackets must not be parsed as Rich markup.
+    seed(numbers=(1,), author="dependabot[bot]",
+         title="bump [golang.org/x/crypto] from 1 to 2",
+         body="Bumps [pkg](url) from [a] to [b].")
+    with db.connect() as conn:
+        pid = db.find_pull(conn, 1)[0]["id"]
+        db.add_note(conn, pid, "see [section] of docs")
+
+    res_list = run("list")
+    assert res_list.exit_code == 0
+    assert "golang.org/x/crypto" in res_list.stdout
+
+    res_show = run("show", "1")
+    assert res_show.exit_code == 0
+    assert "dependabot[bot]" in res_show.stdout
+    assert "[section]" in res_show.stdout
+
+
 def test_review_rejects_bad_status():
     seed()
     res = run("review", "1", "bogus")
