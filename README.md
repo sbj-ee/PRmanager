@@ -8,7 +8,8 @@ review status, notes, and tags.
 
 ## Features
 
-- Track any number of GitHub repos and sync their PRs into local SQLite.
+- Track any number of GitHub repos and **incrementally sync** their PRs into
+  local SQLite — after the first sync, only updated PRs are fetched.
 - List and filter PRs by repo, state, author, tag, or review status — including
   case-insensitive **fuzzy author matching** (`--author dependabot` matches
   `dependabot[bot]`) and `--mine` for your own PRs.
@@ -47,9 +48,10 @@ prm auth --token ghp_xxx       # store a token
 
 ```bash
 prm track octocat/Hello-World      # start tracking a repo
-prm sync                           # sync PRs for all tracked repos
+prm sync                           # sync PRs for all tracked repos (incremental)
 prm sync octocat/Hello-World       # ...or just one
-prm repos                          # list tracked repos
+prm sync octocat/Hello-World --full  # ignore the watermark, re-fetch everything
+prm repos                          # list tracked repos (+ last-synced time)
 
 prm list                           # list all cached PRs
 prm list --repo octocat/Hello-World --state open

@@ -66,6 +66,30 @@ def test_fetch_pulls_paginates(monkeypatch):
     assert pulls[-1]["number"] == 200
 
 
+def test_fetch_pulls_since_stops_at_watermark():
+    client = GitHubClient("tok")
+    # newest-first; watermark is between the 2nd and 3rd PR
+    def pr(n, ts):
+        p = _raw_pr(n)
+        p["updated_at"] = ts
+        return p
+
+    page1 = [
+        pr(3, "2026-03-03T00:00:00Z"),
+        pr(2, "2026-03-02T00:00:00Z"),
+        pr(1, "2026-03-01T00:00:00Z"),  # older than since -> stop here
+    ]
+
+    class FakeSession:
+        def get(self, url, params=None, timeout=None):
+            return FakeResp(json_data=page1 if params["page"] == 1 else [])
+
+    client.session = FakeSession()
+    pulls = client.fetch_pulls("o", "r", since="2026-03-02T00:00:00Z")
+    nums = [p["number"] for p in pulls]
+    assert nums == [3, 2]  # PR 1 excluded; boundary (2) included
+
+
 def test_submit_review_builds_payload(monkeypatch):
     client = GitHubClient("tok")
     captured = {}

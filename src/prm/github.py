@@ -72,8 +72,17 @@ class GitHubClient:
             raise GitHubError("could not determine the authenticated user.")
         return login
 
-    def fetch_pulls(self, owner: str, repo: str, state: str = "all") -> list[dict]:
-        """Fetch all PRs for a repo (paginated), normalized to our schema."""
+    def fetch_pulls(
+        self, owner: str, repo: str, state: str = "all", since: str | None = None
+    ) -> list[dict]:
+        """Fetch PRs for a repo (paginated), normalized to our schema.
+
+        PRs are returned newest-updated first. When ``since`` (an ISO-8601
+        ``updated_at`` watermark) is given, pagination stops as soon as a PR
+        older than it is seen, so only new/changed PRs are returned. The
+        boundary timestamp is included to avoid missing ties (upserts are
+        idempotent).
+        """
         pulls: list[dict] = []
         page = 1
         while True:
@@ -90,9 +99,15 @@ class GitHubClient:
             batch = resp.json()
             if not batch:
                 break
+            stop = False
             for pr in batch:
-                pulls.append(self._normalize(pr))
-            if len(batch) < 100:
+                norm = self._normalize(pr)
+                # ISO-8601 UTC ("...Z") strings compare correctly lexically.
+                if since and norm["updated_at"] and norm["updated_at"] < since:
+                    stop = True
+                    break
+                pulls.append(norm)
+            if stop or len(batch) < 100:
                 break
             page += 1
         return pulls

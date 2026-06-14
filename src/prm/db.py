@@ -11,10 +11,14 @@ from prm.config import db_path
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS repos (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    owner      TEXT NOT NULL,
-    name       TEXT NOT NULL,
-    full_name  TEXT NOT NULL UNIQUE,
-    added_at   TEXT NOT NULL DEFAULT (datetime('now'))
+    owner           TEXT NOT NULL,
+    name            TEXT NOT NULL,
+    full_name       TEXT NOT NULL UNIQUE,
+    added_at        TEXT NOT NULL DEFAULT (datetime('now')),
+    -- incremental-sync watermark: newest PR updated_at ingested, and the
+    -- --state filter that watermark was built with.
+    last_synced_at  TEXT,
+    last_sync_state TEXT
 );
 
 CREATE TABLE IF NOT EXISTS pulls (
@@ -66,6 +70,16 @@ def connect() -> Iterator[sqlite3.Connection]:
 def init_db() -> None:
     with connect() as conn:
         conn.executescript(SCHEMA)
+        _migrate(conn)
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    """Add columns introduced after the initial schema, for existing DBs."""
+    cols = {row["name"] for row in conn.execute("PRAGMA table_info(repos)")}
+    if "last_synced_at" not in cols:
+        conn.execute("ALTER TABLE repos ADD COLUMN last_synced_at TEXT")
+    if "last_sync_state" not in cols:
+        conn.execute("ALTER TABLE repos ADD COLUMN last_sync_state TEXT")
 
 
 # ----- repos -----
@@ -99,6 +113,16 @@ def get_repo(conn: sqlite3.Connection, full_name: str) -> Optional[sqlite3.Row]:
     return conn.execute(
         "SELECT * FROM repos WHERE full_name = ?", (full_name,)
     ).fetchone()
+
+
+def set_repo_sync(
+    conn: sqlite3.Connection, repo_id: int, last_synced_at: Optional[str], state: str
+) -> None:
+    """Record the incremental-sync watermark for a repo."""
+    conn.execute(
+        "UPDATE repos SET last_synced_at = ?, last_sync_state = ? WHERE id = ?",
+        (last_synced_at, state, repo_id),
+    )
 
 
 # ----- pulls -----

@@ -120,7 +120,7 @@ def test_sync_pulls_from_github(monkeypatch):
         def __init__(self, token):
             pass
 
-        def fetch_pulls(self, owner, name, state="all"):
+        def fetch_pulls(self, owner, name, state="all", since=None):
             return [make_pr(10), make_pr(11)]
 
     monkeypatch.setattr(cli, "GitHubClient", FakeClient)
@@ -131,6 +131,57 @@ def test_sync_pulls_from_github(monkeypatch):
     assert "Synced 2 PRs" in res.stdout
     with db.connect() as conn:
         assert len(db.find_pull(conn, 10)) == 1
+
+
+def _watermark_recording_client(returns):
+    """A fake client that records the `since` it was called with."""
+    calls = []
+
+    class FakeClient:
+        def __init__(self, token):
+            pass
+
+        def fetch_pulls(self, owner, name, state="all", since=None):
+            calls.append(since)
+            return returns
+
+    return FakeClient, calls
+
+
+def test_incremental_sync_uses_watermark(monkeypatch):
+    monkeypatch.setattr(config, "resolve_token", lambda: "tok")
+    Fake, calls = _watermark_recording_client(
+        [make_pr(1, updated_at="2026-03-01T00:00:00Z")]
+    )
+    monkeypatch.setattr(cli, "GitHubClient", Fake)
+
+    assert run("sync", "o/r").exit_code == 0          # first sync: no watermark
+    assert run("sync", "o/r").exit_code == 0          # second: passes watermark
+    assert calls == [None, "2026-03-01T00:00:00Z"]
+
+
+def test_full_flag_ignores_watermark(monkeypatch):
+    monkeypatch.setattr(config, "resolve_token", lambda: "tok")
+    Fake, calls = _watermark_recording_client(
+        [make_pr(1, updated_at="2026-03-01T00:00:00Z")]
+    )
+    monkeypatch.setattr(cli, "GitHubClient", Fake)
+
+    run("sync", "o/r")
+    run("sync", "o/r", "--full")
+    assert calls == [None, None]
+
+
+def test_state_change_forces_full_sync(monkeypatch):
+    monkeypatch.setattr(config, "resolve_token", lambda: "tok")
+    Fake, calls = _watermark_recording_client(
+        [make_pr(1, updated_at="2026-03-01T00:00:00Z")]
+    )
+    monkeypatch.setattr(cli, "GitHubClient", Fake)
+
+    run("sync", "o/r", "--state", "open")
+    run("sync", "o/r", "--state", "all")   # different state -> no watermark reuse
+    assert calls == [None, None]
 
 
 def test_list_mine_uses_login(monkeypatch):

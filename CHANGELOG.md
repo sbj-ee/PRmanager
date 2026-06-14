@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Incremental sync.** Each repo records a watermark (the newest PR
+  `updated_at` ingested, plus the `--state` it used); subsequent syncs fetch
+  only PRs updated since then and stop paginating early. Use `prm sync --full`
+  to force a complete re-fetch. `prm repos` now shows the last-synced time.
+
 ## [0.1.3] - 2026-06-14
 
 ### Documentation

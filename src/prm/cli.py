@@ -150,9 +150,10 @@ def repos() -> None:
     table = Table(title="Tracked repositories")
     table.add_column("Repository", style="cyan")
     table.add_column("PRs", justify="right")
-    table.add_column("Added", style="dim")
+    table.add_column("Last synced", style="dim")
     for r in rows:
-        table.add_row(r["full_name"], str(r["pr_count"]), r["added_at"])
+        synced = r["last_synced_at"] or "never"
+        table.add_row(r["full_name"], str(r["pr_count"]), synced)
     console.print(table)
 
 
@@ -164,8 +165,15 @@ def sync(
     state: str = typer.Option(
         "all", "--state", help="Which PRs to fetch: open, closed, or all."
     ),
+    full: bool = typer.Option(
+        False, "--full", help="Ignore the watermark and re-fetch every PR."
+    ),
 ) -> None:
-    """Fetch pull requests from GitHub into the local database."""
+    """Fetch pull requests from GitHub into the local database.
+
+    Syncs are incremental: only PRs updated since the last sync are fetched.
+    Use --full to force a complete re-fetch.
+    """
     if state not in ("open", "closed", "all"):
         _fail("--state must be one of: open, closed, all")
 
@@ -174,25 +182,41 @@ def sync(
     with db.connect() as conn:
         if repo:
             owner, name = _split_repo(repo)
-            targets = [(db.add_repo(conn, owner, name), owner, name)]
+            db.add_repo(conn, owner, name)
+            targets = [db.get_repo(conn, f"{owner}/{name}")]
         else:
-            rows = db.list_repos(conn)
-            if not rows:
+            targets = db.list_repos(conn)
+            if not targets:
                 _fail("no repositories tracked. Use 'prm track owner/name' first.")
-            targets = [(r["id"], r["owner"], r["name"]) for r in rows]
 
         total = 0
-        for repo_id, owner, name in targets:
-            full = f"{owner}/{name}"
+        for r in targets:
+            full_name = r["full_name"]
+            # Use the watermark only when the previous sync used the same state.
+            since = None
+            if not full and r["last_synced_at"] and r["last_sync_state"] == state:
+                since = r["last_synced_at"]
+
             try:
-                with console.status(f"Syncing {full}…"):
-                    pulls = client.fetch_pulls(owner, name, state=state)
+                with console.status(f"Syncing {full_name}…"):
+                    pulls = client.fetch_pulls(
+                        r["owner"], r["name"], state=state, since=since
+                    )
             except GitHubError as e:
                 _fail(str(e))
+
             for pr in pulls:
-                db.upsert_pull(conn, repo_id, pr)
+                db.upsert_pull(conn, r["id"], pr)
+
+            newest = max((p["updated_at"] for p in pulls if p["updated_at"]), default=None)
+            watermark = max(t for t in (r["last_synced_at"], newest) if t) if (
+                r["last_synced_at"] or newest
+            ) else None
+            db.set_repo_sync(conn, r["id"], watermark, state)
+
             total += len(pulls)
-            console.print(f"  [green]{full}[/]: {len(pulls)} PRs")
+            kind = "updated" if since else "PRs"
+            console.print(f"  [green]{full_name}[/]: {len(pulls)} {kind}")
 
     console.print(f"[bold green]Synced {total} PRs.[/]")
 
