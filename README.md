@@ -100,6 +100,10 @@ pytest                 # run the test suite
 Tests run fully offline: the network and the `gh` fallback are mocked, and
 each test gets its own temp SQLite DB and config (see `tests/conftest.py`).
 
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md).
+
 ## License
 
 [MIT](LICENSE) © Stephen B. Johnson
