@@ -76,6 +76,10 @@ When a PR number exists in more than one tracked repo, disambiguate with
 ## Development
 
 ```bash
-pip install -e .
+pip install -e ".[dev]"
 python -m prm --help
+pytest                 # run the test suite
 ```
+
+Tests run fully offline: the network and the `gh` fallback are mocked, and
+each test gets its own temp SQLite DB and config (see `tests/conftest.py`).
