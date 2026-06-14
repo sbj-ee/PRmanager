@@ -185,7 +185,16 @@ def find_pull(
     ).fetchall()
 
 
-def query_pulls(conn: sqlite3.Connection, filters: dict) -> list[sqlite3.Row]:
+# Allowed sort orders, keyed by a short name (avoids SQL injection via order).
+_ORDERS = {
+    "updated-desc": "p.updated_at DESC",
+    "created-asc": "p.created_at ASC",
+}
+
+
+def query_pulls(
+    conn: sqlite3.Connection, filters: dict, order: str = "updated-desc"
+) -> list[sqlite3.Row]:
     where = []
     params: list = []
 
@@ -221,7 +230,7 @@ def query_pulls(conn: sqlite3.Connection, filters: dict) -> list[sqlite3.Row]:
                (SELECT COUNT(*) FROM notes WHERE pull_id = p.id) AS note_count
         FROM pulls p JOIN repos r ON r.id = p.repo_id
         {clause}
-        ORDER BY p.updated_at DESC
+        ORDER BY {_ORDERS.get(order, _ORDERS["updated-desc"])}
     """
     return conn.execute(sql, params).fetchall()
 

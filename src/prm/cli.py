@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import webbrowser
+from datetime import datetime, timezone
 from typing import Optional
 
 import typer
@@ -33,6 +34,26 @@ REVIEW_STYLE = {
 def _fail(msg: str) -> None:
     err.print(f"[bold red]error:[/] {msg}")
     raise typer.Exit(1)
+
+
+def _age(iso: Optional[str]) -> str:
+    """Compact human age of an ISO-8601 UTC timestamp, e.g. '3d', '5h', '2w'."""
+    if not iso:
+        return ""
+    try:
+        ts = datetime.fromisoformat(iso.replace("Z", "+00:00"))
+    except ValueError:
+        return ""
+    delta = datetime.now(timezone.utc) - ts
+    secs = int(delta.total_seconds())
+    if secs < 3600:
+        return f"{secs // 60}m"
+    if secs < 86400:
+        return f"{secs // 3600}h"
+    days = secs // 86400
+    if days < 14:
+        return f"{days}d"
+    return f"{days // 7}w"
 
 
 def _split_repo(full: str) -> tuple[str, str]:
@@ -240,6 +261,11 @@ def list_prs(
     no_drafts: bool = typer.Option(
         False, "--no-drafts", help="Exclude draft PRs from the listing."
     ),
+    needs_review: bool = typer.Option(
+        False,
+        "--needs-review",
+        help="Open, non-draft PRs you haven't reviewed yet (review pending).",
+    ),
 ) -> None:
     """List cached pull requests with optional filters."""
     if mine and author:
@@ -252,6 +278,12 @@ def list_prs(
         "tag": tag,
         "review_status": review,
     }
+    if needs_review:
+        if state or review:
+            _fail("--needs-review already implies --state open and review pending.")
+        filters["state"] = "open"
+        filters["review_status"] = "pending"
+        filters["draft"] = False
     if mine:
         # exact match on your own login, so it can't over-match a superstring
         filters["author_exact"] = _resolve_login()
@@ -265,35 +297,79 @@ def list_prs(
         console.print("[dim]No matching PRs. Try 'prm sync' first.[/]")
         return
 
-    table = Table(title=f"Pull requests ({len(rows)})")
+    _render_pr_table(rows, title=f"Pull requests ({len(rows)})")
+
+
+def _render_pr_table(rows, title: str, show_age: bool = False) -> None:
+    """Render PR rows as a Rich table. Untrusted fields are markup-escaped."""
+    table = Table(title=title)
     table.add_column("#", justify="right", style="bold")
     table.add_column("Repo", style="cyan")
     table.add_column("Title")
     table.add_column("Author", style="magenta")
-    table.add_column("State")
+    if show_age:
+        table.add_column("Age", justify="right", style="yellow")
+    else:
+        table.add_column("State")
     table.add_column("Review")
     table.add_column("Tags", style="blue")
 
     for r in rows:
-        state_label = "merged" if r["merged"] else r["state"]
-        state_style = "blue" if r["merged"] else STATE_STYLE.get(r["state"], "white")
         # PR titles/authors/tags are untrusted; escape Rich markup in them.
-        title = escape(r["title"] or "")
+        title_cell = escape(r["title"] or "")
         if r["draft"]:
-            title = f"[dim](draft)[/] {title}"
+            title_cell = f"[dim](draft)[/] {title_cell}"
         if r["note_count"]:
-            title += f" [dim]📝{r['note_count']}[/]"
+            title_cell += f" [dim]📝{r['note_count']}[/]"
         review_status = r["review_status"] or "pending"
+        if show_age:
+            mid_cell = _age(r["created_at"])
+        else:
+            state_label = "merged" if r["merged"] else r["state"]
+            state_style = "blue" if r["merged"] else STATE_STYLE.get(r["state"], "white")
+            mid_cell = f"[{state_style}]{state_label}[/]"
         table.add_row(
             str(r["number"]),
             r["repo"],
-            title,
+            title_cell,
             escape(r["author"] or ""),
-            f"[{state_style}]{state_label}[/]",
+            mid_cell,
             f"[{REVIEW_STYLE.get(review_status, 'white')}]{review_status}[/]",
             escape(r["tags"] or ""),
         )
     console.print(table)
+
+
+@app.command()
+def triage(
+    repo: Optional[str] = typer.Option(None, "--repo", "-r", help="Filter by repo."),
+    include_mine: bool = typer.Option(
+        False, "--include-mine", help="Include PRs you authored (excluded by default)."
+    ),
+) -> None:
+    """Show the review queue: open, non-draft, unreviewed PRs, oldest first.
+
+    This is the maintainer's "what needs me" view across tracked repos.
+    """
+    filters: dict = {
+        "repo": repo,
+        "state": "open",
+        "review_status": "pending",
+        "draft": False,
+    }
+    with db.connect() as conn:
+        rows = db.query_pulls(conn, filters, order="created-asc")
+
+    if not include_mine:
+        mine = config.cached_login()
+        if mine:
+            rows = [r for r in rows if (r["author"] or "") != mine]
+
+    if not rows:
+        console.print("[green]Triage queue is empty — nothing awaiting review.[/]")
+        return
+
+    _render_pr_table(rows, title=f"Triage queue ({len(rows)}) — oldest first", show_age=True)
 
 
 @app.command()

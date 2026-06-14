@@ -195,6 +195,58 @@ def test_list_mine_uses_login(monkeypatch):
     assert "PR 2" not in res.stdout
 
 
+def _seed_review_mix():
+    with db.connect() as conn:
+        rid = db.add_repo(conn, "o", "r")
+        db.upsert_pull(conn, rid, make_pr(1))                    # open, pending -> in
+        db.upsert_pull(conn, rid, make_pr(2, draft=True))        # draft -> out
+        db.upsert_pull(conn, rid, make_pr(3, state="closed"))    # closed -> out
+        db.upsert_pull(conn, rid, make_pr(4))                    # reviewed -> out
+        pid4 = db.find_pull(conn, 4)[0]["id"]
+        db.set_review_status(conn, pid4, "approved")
+
+
+def test_needs_review_filter():
+    _seed_review_mix()
+    res = run("list", "--needs-review")
+    assert res.exit_code == 0
+    assert "Pull requests (1)" in res.stdout
+
+
+def test_needs_review_rejects_conflicting_flags():
+    _seed_review_mix()
+    assert run("list", "--needs-review", "--state", "open").exit_code == 1
+    assert run("list", "--needs-review", "--review", "pending").exit_code == 1
+
+
+def test_triage_excludes_drafts_closed_and_reviewed():
+    _seed_review_mix()
+    res = run("triage")
+    assert res.exit_code == 0
+    assert "Triage queue (1)" in res.stdout
+
+
+def test_triage_excludes_own_prs_by_default(monkeypatch):
+    with db.connect() as conn:
+        rid = db.add_repo(conn, "o", "r")
+        db.upsert_pull(conn, rid, make_pr(1, author="sbj-ee"))
+        db.upsert_pull(conn, rid, make_pr(2, author="contributor"))
+    monkeypatch.setattr(config, "cached_login", lambda: "sbj-ee")
+
+    res = run("triage")
+    assert "Triage queue (1)" in res.stdout      # own PR excluded
+    res_all = run("triage", "--include-mine")
+    assert "Triage queue (2)" in res_all.stdout
+
+
+def test_triage_empty_message():
+    with db.connect() as conn:
+        db.add_repo(conn, "o", "r")
+    res = run("triage")
+    assert res.exit_code == 0
+    assert "empty" in res.stdout
+
+
 def test_list_mine_conflicts_with_author():
     seed()
     res = run("list", "--mine", "--author", "alice")

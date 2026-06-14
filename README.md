@@ -15,6 +15,9 @@ review status, notes, and tags.
   `dependabot[bot]`) and `--mine` for your own PRs.
 - Local-only workflow state that GitHub doesn't give you: a per-PR **review
   status**, free-form **notes**, and **tags** — all stored locally.
+- **Triage view** for maintainers: `prm triage` shows the review queue (open,
+  non-draft, unreviewed PRs, oldest first), and `prm list --needs-review`
+  filters to the same set.
 - **Write-back**: post real reviews to GitHub (approve / request changes /
   comment) with a confirmation prompt.
 - Open any PR in your browser straight from the terminal.
@@ -57,6 +60,11 @@ prm list                           # list all cached PRs
 prm list --repo octocat/Hello-World --state open
 prm list --author octocat --tag urgent --review pending
 prm list --mine                    # only PRs you authored
+prm list --needs-review            # open, non-draft, not yet reviewed
+
+prm triage                         # maintainer review queue, oldest first
+prm triage --repo owner/name       # ...scoped to one repo
+prm triage --include-mine          # include your own PRs (excluded by default)
 
 prm show 42                        # full details + notes + tags
 prm note 42 "needs a test for the edge case"

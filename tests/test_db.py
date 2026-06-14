@@ -68,6 +68,16 @@ def test_query_pulls_filters():
         assert len(db.query_pulls(conn, {"draft": False})) == 2
 
 
+def test_query_pulls_order():
+    with db.connect() as conn:
+        rid = db.add_repo(conn, "o", "r")
+        db.upsert_pull(conn, rid, make_pr(1, created_at="2026-03-01T00:00:00Z"))
+        db.upsert_pull(conn, rid, make_pr(2, created_at="2026-01-01T00:00:00Z"))
+        db.upsert_pull(conn, rid, make_pr(3, created_at="2026-02-01T00:00:00Z"))
+        oldest_first = db.query_pulls(conn, {}, order="created-asc")
+    assert [r["number"] for r in oldest_first] == [2, 3, 1]
+
+
 def test_notes_and_tags():
     with db.connect() as conn:
         rid = db.add_repo(conn, "o", "r")

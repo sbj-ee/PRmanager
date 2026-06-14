@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`prm triage`** — a maintainer review queue showing open, non-draft,
+  unreviewed PRs across tracked repos, oldest first, with a PR-age column. Your
+  own PRs are excluded by default (`--include-mine` to include them);
+  `--repo` scopes to one repo.
+- **`prm list --needs-review`** — filters to open, non-draft PRs you haven't
+  reviewed yet (review status pending).
+
 ## [0.2.0] - 2026-06-14
 
 ### Added
