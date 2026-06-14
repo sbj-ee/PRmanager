@@ -9,7 +9,9 @@ review status, notes, and tags.
 ## Features
 
 - Track any number of GitHub repos and sync their PRs into local SQLite.
-- List and filter PRs by repo, state, author, tag, or review status.
+- List and filter PRs by repo, state, author, tag, or review status — including
+  case-insensitive **fuzzy author matching** (`--author dependabot` matches
+  `dependabot[bot]`) and `--mine` for your own PRs.
 - Local-only workflow state that GitHub doesn't give you: a per-PR **review
   status**, free-form **notes**, and **tags** — all stored locally.
 - **Write-back**: post real reviews to GitHub (approve / request changes /
