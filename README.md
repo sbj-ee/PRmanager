@@ -10,6 +10,8 @@ review status, notes, and tags.
 - List and filter PRs by repo, state, author, tag, or review status.
 - Local-only workflow state that GitHub doesn't give you: a per-PR **review
   status**, free-form **notes**, and **tags** — all stored locally.
+- **Write-back**: post real reviews to GitHub (approve / request changes /
+  comment) with a confirmation prompt.
 - Open any PR in your browser straight from the terminal.
 - Works offline once synced; the database is the source of truth for browsing.
 
@@ -54,8 +56,13 @@ prm show 42                        # full details + notes + tags
 prm note 42 "needs a test for the edge case"
 prm tag 42 urgent
 prm tag 42 urgent --remove
-prm review 42 approved             # pending | approved | changes | commented
+prm review 42 approved             # set LOCAL status: pending|approved|changes|commented
 prm open 42                        # open in browser
+
+# Write-back: post a real review to GitHub (asks to confirm; -y to skip)
+prm submit 42 approve
+prm submit 42 request-changes --body "needs a test for the edge case"
+prm submit 42 comment -b "looks reasonable" --yes
 ```
 
 When a PR number exists in more than one tracked repo, disambiguate with

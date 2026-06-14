@@ -23,17 +23,46 @@ class GitHubClient:
             headers["Authorization"] = f"Bearer {token}"
         self.session.headers.update(headers)
 
-    def _get(self, path: str, params: dict | None = None) -> requests.Response:
-        resp = self.session.get(f"{API_ROOT}{path}", params=params, timeout=30)
+    def _check(self, resp: requests.Response) -> requests.Response:
         if resp.status_code == 401:
             raise GitHubError("Unauthorized (401). Check your GitHub token.")
         if resp.status_code == 403 and "rate limit" in resp.text.lower():
             raise GitHubError("GitHub API rate limit exceeded.")
+        if resp.status_code == 403:
+            raise GitHubError(
+                "Forbidden (403). Your token may lack the required scope "
+                "(pull-request write / 'repo')."
+            )
         if resp.status_code == 404:
-            raise GitHubError(f"Not found (404): {path}")
+            raise GitHubError(f"Not found (404): {resp.request.path_url}")
+        if resp.status_code == 422:
+            raise GitHubError(f"Unprocessable (422): {resp.text[:300]}")
         if not resp.ok:
             raise GitHubError(f"GitHub API error {resp.status_code}: {resp.text[:200]}")
         return resp
+
+    def _get(self, path: str, params: dict | None = None) -> requests.Response:
+        return self._check(
+            self.session.get(f"{API_ROOT}{path}", params=params, timeout=30)
+        )
+
+    def _post(self, path: str, payload: dict) -> requests.Response:
+        return self._check(
+            self.session.post(f"{API_ROOT}{path}", json=payload, timeout=30)
+        )
+
+    def submit_review(
+        self, owner: str, repo: str, number: int, event: str, body: str = ""
+    ) -> dict:
+        """Submit a review on a PR. event is one of GitHub's review events:
+        APPROVE, REQUEST_CHANGES, COMMENT."""
+        payload: dict = {"event": event}
+        if body:
+            payload["body"] = body
+        resp = self._post(
+            f"/repos/{owner}/{repo}/pulls/{number}/reviews", payload
+        )
+        return resp.json()
 
     def current_user(self) -> str:
         """Return the login of the authenticated user."""

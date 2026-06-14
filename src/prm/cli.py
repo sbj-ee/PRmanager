@@ -353,6 +353,72 @@ def review(
     console.print(f"[green]{pr['repo']}#{number}[/] review status → {status}")
 
 
+# Maps the user-facing event name to (GitHub API event, local review status).
+SUBMIT_EVENTS = {
+    "approve": ("APPROVE", "approved"),
+    "request-changes": ("REQUEST_CHANGES", "changes"),
+    "comment": ("COMMENT", "commented"),
+}
+
+
+@app.command()
+def submit(
+    number: int = typer.Argument(...),
+    event: str = typer.Argument(
+        ..., help=f"One of: {', '.join(SUBMIT_EVENTS)}."
+    ),
+    body: Optional[str] = typer.Option(
+        None, "--body", "-b", help="Review comment body."
+    ),
+    repo: Optional[str] = typer.Option(None, "--repo", "-r"),
+    yes: bool = typer.Option(
+        False, "--yes", "-y", help="Skip the confirmation prompt."
+    ),
+) -> None:
+    """Post a review to GitHub (approve, request changes, or comment)."""
+    event = event.lower()
+    if event not in SUBMIT_EVENTS:
+        _fail(f"event must be one of: {', '.join(SUBMIT_EVENTS)}")
+    api_event, local_status = SUBMIT_EVENTS[event]
+
+    if event in ("request-changes", "comment") and not body:
+        _fail(f"--body is required when event is '{event}'.")
+
+    token = config.resolve_token()
+    if not token:
+        _fail("posting a review needs authentication. Run 'prm auth --token <T>'.")
+
+    with db.connect() as conn:
+        pr = _resolve_pull(conn, number, repo)
+        owner, name = _split_repo(pr["repo"])
+        pull_id = pr["id"]
+
+    console.print(
+        Panel(
+            f"[bold]{pr['repo']}#{number}[/]  {pr['title']}\n"
+            f"event: [bold]{api_event}[/]\n"
+            f"body: {body or '[dim](none)[/]'}",
+            title="About to post this review to GitHub",
+            expand=False,
+        )
+    )
+    if not yes and not typer.confirm("Post this review?"):
+        console.print("[dim]aborted — nothing posted[/]")
+        raise typer.Exit(0)
+
+    client = GitHubClient(token)
+    try:
+        review = client.submit_review(owner, name, number, api_event, body or "")
+    except GitHubError as e:
+        _fail(str(e))
+
+    with db.connect() as conn:
+        db.set_review_status(conn, pull_id, local_status)
+
+    url = review.get("html_url", pr["url"])
+    console.print(f"[green]Review posted[/] to {pr['repo']}#{number} → {url}")
+
+
 @app.command(name="open")
 def open_pr(
     number: int = typer.Argument(...),
