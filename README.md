@@ -48,6 +48,7 @@ prm repos                          # list tracked repos
 prm list                           # list all cached PRs
 prm list --repo octocat/Hello-World --state open
 prm list --author octocat --tag urgent --review pending
+prm list --mine                    # only PRs you authored
 
 prm show 42                        # full details + notes + tags
 prm note 42 "needs a test for the edge case"

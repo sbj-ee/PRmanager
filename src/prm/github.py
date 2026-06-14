@@ -35,6 +35,14 @@ class GitHubClient:
             raise GitHubError(f"GitHub API error {resp.status_code}: {resp.text[:200]}")
         return resp
 
+    def current_user(self) -> str:
+        """Return the login of the authenticated user."""
+        resp = self._get("/user")
+        login = resp.json().get("login")
+        if not login:
+            raise GitHubError("could not determine the authenticated user.")
+        return login
+
     def fetch_pulls(self, owner: str, repo: str, state: str = "all") -> list[dict]:
         """Fetch all PRs for a repo (paginated), normalized to our schema."""
         pulls: list[dict] = []

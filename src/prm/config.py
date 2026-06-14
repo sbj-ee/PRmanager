@@ -53,6 +53,18 @@ def set_token(token: str) -> None:
     save_config(cfg)
 
 
+def cached_login() -> str | None:
+    """The authenticated user's login, if previously resolved."""
+    login = load_config().get("login")
+    return str(login) if login else None
+
+
+def set_login(login: str) -> None:
+    cfg = load_config()
+    cfg["login"] = login
+    save_config(cfg)
+
+
 def resolve_token() -> str | None:
     """Find a GitHub token: env vars, config file, then the gh CLI."""
     for var in ("GITHUB_TOKEN", "GH_TOKEN"):

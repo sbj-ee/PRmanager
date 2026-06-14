@@ -42,6 +42,22 @@ def _split_repo(full: str) -> tuple[str, str]:
     return owner, name
 
 
+def _resolve_login() -> str:
+    """Return the authenticated user's login, caching it in config."""
+    login = config.cached_login()
+    if login:
+        return login
+    token = config.resolve_token()
+    if not token:
+        _fail("--mine needs authentication. Set a token with 'prm auth --token'.")
+    try:
+        login = GitHubClient(token).current_user()
+    except GitHubError as e:
+        _fail(str(e))
+    config.set_login(login)
+    return login
+
+
 def _resolve_pull(conn, number: int, repo: Optional[str]):
     """Return a single PR row or exit with a helpful message."""
     rows = db.find_pull(conn, number, repo)
@@ -188,6 +204,9 @@ def list_prs(
         None, "--state", "-s", help="open or closed."
     ),
     author: Optional[str] = typer.Option(None, "--author", "-a"),
+    mine: bool = typer.Option(
+        False, "--mine", help="Only PRs you authored (the authenticated user)."
+    ),
     tag: Optional[str] = typer.Option(None, "--tag", "-T"),
     review: Optional[str] = typer.Option(
         None, "--review", help=f"Review status: {', '.join(REVIEW_STATES)}."
@@ -197,6 +216,11 @@ def list_prs(
     ),
 ) -> None:
     """List cached pull requests with optional filters."""
+    if mine:
+        if author:
+            _fail("use either --mine or --author, not both.")
+        author = _resolve_login()
+
     filters: dict = {
         "repo": repo,
         "state": state,
