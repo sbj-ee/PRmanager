@@ -70,6 +70,18 @@ prm submit 42 comment -b "looks reasonable" --yes
 When a PR number exists in more than one tracked repo, disambiguate with
 `--repo owner/name`.
 
+## Shell completion
+
+`prm` ships tab-completion for bash, zsh, and fish (via Typer/Click).
+
+```bash
+prm --install-completion        # install for your current shell, then restart it
+prm --show-completion zsh       # or print the script to add it yourself
+```
+
+Once installed, `prm <TAB>` completes commands and `prm submit <TAB>` etc.
+complete options.
+
 ## Data locations
 
 - Database: `~/.local/share/prmanager/prm.db` (override with `PRM_DB`)

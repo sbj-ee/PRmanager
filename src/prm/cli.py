@@ -15,7 +15,6 @@ from prm.github import GitHubClient, GitHubError
 
 app = typer.Typer(
     help="Manage GitHub pull requests from the command line, backed by SQLite.",
-    add_completion=False,
 )
 console = Console()
 err = Console(stderr=True)
