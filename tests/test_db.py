@@ -58,6 +58,12 @@ def test_query_pulls_filters():
         assert len(db.query_pulls(conn, {"repo": "o/one"})) == 2
         assert len(db.query_pulls(conn, {"state": "open"})) == 1
         assert len(db.query_pulls(conn, {"author": "alice"})) == 2
+        # substring + case-insensitive
+        assert len(db.query_pulls(conn, {"author": "ALIC"})) == 2
+        assert len(db.query_pulls(conn, {"author": "bo"})) == 1
+        # exact match is stricter
+        assert len(db.query_pulls(conn, {"author_exact": "alice"})) == 2
+        assert len(db.query_pulls(conn, {"author_exact": "alic"})) == 0
         assert len(db.query_pulls(conn, {"tag": "wip"})) == 1
         assert len(db.query_pulls(conn, {"draft": False})) == 2
 

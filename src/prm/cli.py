@@ -203,7 +203,9 @@ def list_prs(
     state: Optional[str] = typer.Option(
         None, "--state", "-s", help="open or closed."
     ),
-    author: Optional[str] = typer.Option(None, "--author", "-a"),
+    author: Optional[str] = typer.Option(
+        None, "--author", "-a", help="Filter by author (case-insensitive substring)."
+    ),
     mine: bool = typer.Option(
         False, "--mine", help="Only PRs you authored (the authenticated user)."
     ),
@@ -216,18 +218,19 @@ def list_prs(
     ),
 ) -> None:
     """List cached pull requests with optional filters."""
-    if mine:
-        if author:
-            _fail("use either --mine or --author, not both.")
-        author = _resolve_login()
+    if mine and author:
+        _fail("use either --mine or --author, not both.")
 
     filters: dict = {
         "repo": repo,
         "state": state,
-        "author": author,
+        "author": author,  # substring match
         "tag": tag,
         "review_status": review,
     }
+    if mine:
+        # exact match on your own login, so it can't over-match a superstring
+        filters["author_exact"] = _resolve_login()
     if no_drafts:
         filters["draft"] = False
 

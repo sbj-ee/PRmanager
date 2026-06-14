@@ -172,8 +172,12 @@ def query_pulls(conn: sqlite3.Connection, filters: dict) -> list[sqlite3.Row]:
         where.append("p.state = ?")
         params.append(filters["state"])
     if filters.get("author"):
-        where.append("p.author = ?")
+        # case-insensitive substring match (e.g. "dependabot" -> "dependabot[bot]")
+        where.append("instr(lower(p.author), lower(?)) > 0")
         params.append(filters["author"])
+    if filters.get("author_exact"):
+        where.append("p.author = ?")
+        params.append(filters["author_exact"])
     if filters.get("review_status"):
         where.append("p.review_status = ?")
         params.append(filters["review_status"])
