@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-06-14
+
+First stable release. The CLI, command names, and on-disk SQLite schema are now
+considered stable and will follow semantic versioning. No functional changes
+since 0.9.0; this release marks the feature set built up across 0.1–0.9:
+
+- Track repos and **incrementally sync** their PRs into local SQLite.
+- Rich **filtering** (author/label/assignee/reviewer/tag/review status, `--mine`,
+  `--needs-review`) and a maintainer **triage** queue with **CI status**.
+- **Review-requested detection** (`--requested` / `--reviewer`).
+- Local **review status, notes, and tags**; **write-back** reviews to GitHub.
+- **Desktop notifications** that prioritize review-requested PRs.
+- An interactive **REPL**, shell **completion**, and an offline test suite.
+
 ## [0.9.0] - 2026-06-14
 
 ### Changed
@@ -117,7 +131,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Offline **pytest** suite and **GitHub Actions CI** across Python 3.10–3.13.
 - MIT license.
 
-[Unreleased]: https://github.com/sbj-ee/PRmanager/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/sbj-ee/PRmanager/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/sbj-ee/PRmanager/compare/v0.9.0...v1.0.0
 [0.9.0]: https://github.com/sbj-ee/PRmanager/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/sbj-ee/PRmanager/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/sbj-ee/PRmanager/compare/v0.6.0...v0.7.0
