@@ -1,3 +1,3 @@
 """prmanager — a CLI for managing GitHub pull requests with local SQLite state."""
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
