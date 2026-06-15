@@ -352,9 +352,19 @@ def test_checks_invalidated_on_new_head_sha():
         assert db.find_pull(conn, 1)[0]["checks_status"] is None
 
 
-def test_notify_announces_new_then_not_again(monkeypatch):
+def _capture_notify(monkeypatch):
     calls = []
-    monkeypatch.setattr(cli, "_notify_desktop", lambda t, b: calls.append((t, b)) or True)
+
+    def fake(title, body, urgency="normal"):
+        calls.append((title, body, urgency))
+        return True
+
+    monkeypatch.setattr(cli, "_notify_desktop", fake)
+    return calls
+
+
+def test_notify_announces_new_then_not_again(monkeypatch):
+    calls = _capture_notify(monkeypatch)
     with db.connect() as conn:
         rid = db.add_repo(conn, "o", "r")
         db.upsert_pull(conn, rid, make_pr(1, author="contributor"))
@@ -374,8 +384,7 @@ def test_notify_announces_new_then_not_again(monkeypatch):
 
 
 def test_notify_seed_marks_without_sending(monkeypatch):
-    calls = []
-    monkeypatch.setattr(cli, "_notify_desktop", lambda t, b: calls.append(1) or True)
+    calls = _capture_notify(monkeypatch)
     with db.connect() as conn:
         rid = db.add_repo(conn, "o", "r")
         db.upsert_pull(conn, rid, make_pr(1, author="contributor"))
@@ -389,8 +398,7 @@ def test_notify_seed_marks_without_sending(monkeypatch):
 
 
 def test_notify_excludes_own_prs(monkeypatch):
-    calls = []
-    monkeypatch.setattr(cli, "_notify_desktop", lambda t, b: calls.append(1) or True)
+    calls = _capture_notify(monkeypatch)
     monkeypatch.setattr(config, "cached_login", lambda: "sbj-ee")
     with db.connect() as conn:
         rid = db.add_repo(conn, "o", "r")
@@ -398,6 +406,41 @@ def test_notify_excludes_own_prs(monkeypatch):
     res = run("notify")
     assert "No new PRs" in res.stdout
     assert calls == []
+
+
+def test_notify_prioritizes_review_requested(monkeypatch):
+    calls = _capture_notify(monkeypatch)
+    monkeypatch.setattr(config, "cached_login", lambda: "sbj-ee")
+    with db.connect() as conn:
+        rid = db.add_repo(conn, "o", "r")
+        db.upsert_pull(conn, rid, make_pr(1, author="c1"))                       # plain
+        db.upsert_pull(conn, rid, make_pr(2, author="c2", requested_reviewers="sbj-ee"))
+
+    res = run("notify")
+    assert res.exit_code == 0
+    # requested PR announced first, at critical urgency
+    assert calls[0][2] == "critical"
+    assert "Review requested" in calls[0][0]
+    assert "#2" in calls[0][1]
+    assert calls[1][2] == "normal"
+    assert "(1 review-requested)" in res.stdout
+
+
+def test_notify_requested_only(monkeypatch):
+    calls = _capture_notify(monkeypatch)
+    monkeypatch.setattr(config, "cached_login", lambda: "sbj-ee")
+    with db.connect() as conn:
+        rid = db.add_repo(conn, "o", "r")
+        db.upsert_pull(conn, rid, make_pr(1, author="c1"))                       # ignored
+        db.upsert_pull(conn, rid, make_pr(2, author="c2", requested_reviewers="sbj-ee"))
+
+    res = run("notify", "--requested-only")
+    assert res.exit_code == 0
+    assert len(calls) == 1 and "#2" in calls[0][1]
+    # the non-requested PR was left un-notified for a later run
+    with db.connect() as conn:
+        assert db.find_pull(conn, 1)[0]["notified_at"] is None
+        assert db.find_pull(conn, 2)[0]["notified_at"] is not None
 
 
 def test_triage_empty_message():

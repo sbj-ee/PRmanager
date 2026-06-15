@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **`prm notify` prioritizes review-requested PRs.** PRs where review is
+  requested from you are announced first and at higher (critical) urgency, with
+  a distinct "🔔 Review requested from you" title; the rest follow at normal
+  urgency. New `--requested-only` flag notifies about just the review-requested
+  ones. Notification urgency is now passed through to notify-send/gdbus.
+
 ## [0.8.0] - 2026-06-14
 
 ### Added

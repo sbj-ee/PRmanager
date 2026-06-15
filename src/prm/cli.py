@@ -44,27 +44,30 @@ def _fail(msg: str) -> None:
     raise typer.Exit(1)
 
 
-def _notify_desktop(title: str, body: str) -> bool:
+def _notify_desktop(title: str, body: str, urgency: str = "normal") -> bool:
     """Post a desktop notification. Prefers notify-send, falls back to gdbus.
-    Returns True if a notifier ran."""
+    `urgency` is "low", "normal", or "critical". Returns True if a notifier ran."""
     send = shutil.which("notify-send")
     if send:
         try:
             subprocess.run(
-                [send, "-a", "prmanager", title, body], timeout=10, check=False
+                [send, "-a", "prmanager", "-u", urgency, title, body],
+                timeout=10, check=False,
             )
             return True
         except (OSError, subprocess.SubprocessError):
             return False
     gdbus = shutil.which("gdbus")
     if gdbus:
+        urgency_byte = {"low": 0, "normal": 1, "critical": 2}.get(urgency, 1)
+        hints = f"{{'urgency': <byte {urgency_byte}>}}"
         try:
             subprocess.run(
                 [gdbus, "call", "--session",
                  "--dest", "org.freedesktop.Notifications",
                  "--object-path", "/org/freedesktop/Notifications",
                  "--method", "org.freedesktop.Notifications.Notify",
-                 "prmanager", "0", "", title, body, "[]", "{}", "5000"],
+                 "prmanager", "0", "", title, body, "[]", hints, "5000"],
                 timeout=10, check=False, stdout=subprocess.DEVNULL,
             )
             return True
@@ -460,9 +463,22 @@ def triage(
     )
 
 
+def _review_requested_from(row, login: Optional[str]) -> bool:
+    """True if `login` is among the PR's requested reviewers."""
+    if not login or not row["requested_reviewers"]:
+        return False
+    requested = {x.lower() for x in row["requested_reviewers"].split(",")}
+    return login.lower() in requested
+
+
 @app.command()
 def notify(
     repo: Optional[str] = typer.Option(None, "--repo", "-r", help="Limit to one repo."),
+    requested_only: bool = typer.Option(
+        False,
+        "--requested-only",
+        help="Only notify about PRs where review is requested from you.",
+    ),
     seed: bool = typer.Option(
         False,
         "--seed",
@@ -471,9 +487,10 @@ def notify(
 ) -> None:
     """Desktop-notify about PRs that have newly entered the review queue.
 
-    Considers open, non-draft, unreviewed PRs you didn't author. Each PR is
-    announced once; --seed silently marks the current queue as seen so a later
-    run only notifies about genuinely new arrivals.
+    Considers open, non-draft, unreviewed PRs you didn't author. PRs where
+    review is requested from you are prioritized: announced first and at higher
+    urgency. Each PR is announced once; --seed silently marks the current queue
+    as seen so a later run only notifies about genuinely new arrivals.
     """
     filters: dict = {
         "repo": repo,
@@ -489,26 +506,39 @@ def notify(
             for r in rows
             if r["notified_at"] is None and (not mine or (r["author"] or "") != mine)
         ]
-        if not fresh:
+        # Review-requested PRs first (higher urgency); optionally only those.
+        requested = [r for r in fresh if _review_requested_from(r, mine)]
+        others = [] if requested_only else [r for r in fresh if r not in requested]
+        ordered = requested + others
+
+        if not ordered:
             console.print("[dim]No new PRs needing review.[/]")
             return
 
         sent = 0
-        for r in fresh:
+        for r in ordered:
+            is_req = r in requested
             if not seed:
-                title = "PR needs review"
-                body = f"{r['repo']}#{r['number']}: {r['title'] or ''}\nby {r['author'] or '?'}"
-                if _notify_desktop(title, body):
+                title = "🔔 Review requested from you" if is_req else "PR needs review"
+                body = (
+                    f"{r['repo']}#{r['number']}: {r['title'] or ''}\n"
+                    f"by {r['author'] or '?'}"
+                )
+                urgency = "critical" if is_req else "normal"
+                if _notify_desktop(title, body, urgency=urgency):
                     sent += 1
             db.mark_notified(conn, r["id"])
 
     if seed:
-        console.print(f"[green]Baselined {len(fresh)} PR(s)[/] as seen (no notifications).")
+        console.print(f"[green]Baselined {len(ordered)} PR(s)[/] as seen (no notifications).")
     elif sent:
-        console.print(f"[green]Sent {sent} desktop notification(s).[/]")
+        console.print(
+            f"[green]Sent {sent} desktop notification(s)[/] "
+            f"({len(requested)} review-requested)."
+        )
     else:
         console.print(
-            f"[yellow]{len(fresh)} new PR(s) need review, but no desktop notifier "
+            f"[yellow]{len(ordered)} new PR(s) need review, but no desktop notifier "
             f"was available[/] (install libnotify-bin for notify-send)."
         )
 

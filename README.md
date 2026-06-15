@@ -26,6 +26,8 @@ review status, notes, and tags.
   comment) with a confirmation prompt.
 - **Desktop notifications** (`prm notify`) when a new PR enters your review
   queue — each PR announced once (via `notify-send`, falling back to `gdbus`).
+  PRs where review is requested from you are prioritized: announced first, at
+  higher urgency (`--requested-only` to notify about just those).
 - Open any PR in your browser straight from the terminal.
 - Works offline once synced; the database is the source of truth for browsing.
 
@@ -80,6 +82,7 @@ prm triage --repo owner/name       # ...scoped to one repo
 prm triage --include-mine          # include your own PRs (excluded by default)
 
 prm notify                         # desktop-notify about newly-arrived review PRs
+prm notify --requested-only        # only PRs where review is requested from you
 prm notify --seed                  # mark the current queue seen, without notifying
 
 prm show 42                        # full details + notes + tags
