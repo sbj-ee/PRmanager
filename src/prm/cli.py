@@ -29,6 +29,12 @@ REVIEW_STYLE = {
     "changes": "red",
     "commented": "yellow",
 }
+CHECK_DISPLAY = {
+    "success": "[green]✓[/]",
+    "failure": "[red]✗[/]",
+    "pending": "[yellow]●[/]",
+    "none": "[dim]—[/]",
+}
 
 
 def _fail(msg: str) -> None:
@@ -300,7 +306,9 @@ def list_prs(
     _render_pr_table(rows, title=f"Pull requests ({len(rows)})")
 
 
-def _render_pr_table(rows, title: str, show_age: bool = False) -> None:
+def _render_pr_table(
+    rows, title: str, show_age: bool = False, show_checks: bool = False
+) -> None:
     """Render PR rows as a Rich table. Untrusted fields are markup-escaped."""
     table = Table(title=title)
     table.add_column("#", justify="right", style="bold")
@@ -311,6 +319,8 @@ def _render_pr_table(rows, title: str, show_age: bool = False) -> None:
         table.add_column("Age", justify="right", style="yellow")
     else:
         table.add_column("State")
+    if show_checks:
+        table.add_column("CI", justify="center")
     table.add_column("Review")
     table.add_column("Tags", style="blue")
 
@@ -328,15 +338,18 @@ def _render_pr_table(rows, title: str, show_age: bool = False) -> None:
             state_label = "merged" if r["merged"] else r["state"]
             state_style = "blue" if r["merged"] else STATE_STYLE.get(r["state"], "white")
             mid_cell = f"[{state_style}]{state_label}[/]"
-        table.add_row(
+        cells = [
             str(r["number"]),
             r["repo"],
             title_cell,
             escape(r["author"] or ""),
             mid_cell,
-            f"[{REVIEW_STYLE.get(review_status, 'white')}]{review_status}[/]",
-            escape(r["tags"] or ""),
-        )
+        ]
+        if show_checks:
+            cells.append(CHECK_DISPLAY.get(r["checks_status"], ""))
+        cells.append(f"[{REVIEW_STYLE.get(review_status, 'white')}]{review_status}[/]")
+        cells.append(escape(r["tags"] or ""))
+        table.add_row(*cells)
     console.print(table)
 
 
@@ -346,10 +359,15 @@ def triage(
     include_mine: bool = typer.Option(
         False, "--include-mine", help="Include PRs you authored (excluded by default)."
     ),
+    checks: bool = typer.Option(
+        False, "--checks", help="Fetch and show each PR's CI checks status from GitHub."
+    ),
 ) -> None:
     """Show the review queue: open, non-draft, unreviewed PRs, oldest first.
 
-    This is the maintainer's "what needs me" view across tracked repos.
+    This is the maintainer's "what needs me" view across tracked repos. Pass
+    --checks to fetch the CI rollup (✓ pass / ✗ fail / ● running / — none) for
+    each PR; results are cached so a plain `prm triage` shows the last-known CI.
     """
     filters: dict = {
         "repo": repo,
@@ -357,19 +375,54 @@ def triage(
         "review_status": "pending",
         "draft": False,
     }
-    with db.connect() as conn:
-        rows = db.query_pulls(conn, filters, order="created-asc")
+    mine = None if include_mine else config.cached_login()
 
-    if not include_mine:
-        mine = config.cached_login()
+    def load(conn):
+        rows = db.query_pulls(conn, filters, order="created-asc")
         if mine:
             rows = [r for r in rows if (r["author"] or "") != mine]
+        return rows
 
-    if not rows:
-        console.print("[green]Triage queue is empty — nothing awaiting review.[/]")
-        return
+    with db.connect() as conn:
+        rows = load(conn)
 
-    _render_pr_table(rows, title=f"Triage queue ({len(rows)}) — oldest first", show_age=True)
+        if not rows:
+            console.print("[green]Triage queue is empty — nothing awaiting review.[/]")
+            return
+
+        if checks:
+            _refresh_checks(conn, rows)
+            rows = load(conn)  # re-read with freshly cached checks_status
+
+    _render_pr_table(
+        rows,
+        title=f"Triage queue ({len(rows)}) — oldest first",
+        show_age=True,
+        show_checks=True,
+    )
+
+
+def _refresh_checks(conn, rows) -> None:
+    """Fetch and cache the CI rollup for each row's head commit."""
+    client = GitHubClient(config.resolve_token())
+    missing_sha = False
+    with console.status("Fetching CI checks…") as status:
+        for r in rows:
+            if not r["head_sha"]:
+                missing_sha = True
+                continue
+            owner, name = _split_repo(r["repo"])
+            status.update(f"Fetching CI checks for {r['repo']}#{r['number']}…")
+            try:
+                state = client.checks_status(owner, name, r["head_sha"])
+            except GitHubError:
+                continue  # leave the cached value untouched
+            db.set_checks(conn, r["id"], state)
+    if missing_sha:
+        console.print(
+            "[dim]Some PRs have no cached head commit; run 'prm sync --full' "
+            "to backfill, then retry --checks.[/]"
+        )
 
 
 @app.command()

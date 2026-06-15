@@ -34,6 +34,10 @@ CREATE TABLE IF NOT EXISTS pulls (
     body          TEXT,
     created_at    TEXT,
     updated_at    TEXT,
+    head_sha      TEXT,             -- head commit, used to look up CI checks
+    -- cached CI checks rollup: success / failure / pending / none
+    checks_status   TEXT,
+    checks_synced_at TEXT,
     -- local-only fields:
     review_status TEXT DEFAULT 'pending',  -- pending/approved/changes/commented
     synced_at     TEXT NOT NULL DEFAULT (datetime('now')),
@@ -75,11 +79,16 @@ def init_db() -> None:
 
 def _migrate(conn: sqlite3.Connection) -> None:
     """Add columns introduced after the initial schema, for existing DBs."""
-    cols = {row["name"] for row in conn.execute("PRAGMA table_info(repos)")}
-    if "last_synced_at" not in cols:
+    repo_cols = {row["name"] for row in conn.execute("PRAGMA table_info(repos)")}
+    if "last_synced_at" not in repo_cols:
         conn.execute("ALTER TABLE repos ADD COLUMN last_synced_at TEXT")
-    if "last_sync_state" not in cols:
+    if "last_sync_state" not in repo_cols:
         conn.execute("ALTER TABLE repos ADD COLUMN last_sync_state TEXT")
+
+    pull_cols = {row["name"] for row in conn.execute("PRAGMA table_info(pulls)")}
+    for col in ("head_sha", "checks_status", "checks_synced_at"):
+        if col not in pull_cols:
+            conn.execute(f"ALTER TABLE pulls ADD COLUMN {col} TEXT")
 
 
 # ----- repos -----
@@ -133,8 +142,8 @@ def upsert_pull(conn: sqlite3.Connection, repo_id: int, pr: dict) -> None:
         """
         INSERT INTO pulls
             (repo_id, number, title, author, state, merged, draft, url, body,
-             created_at, updated_at, synced_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+             created_at, updated_at, head_sha, synced_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
         ON CONFLICT (repo_id, number) DO UPDATE SET
             title = excluded.title,
             author = excluded.author,
@@ -145,6 +154,12 @@ def upsert_pull(conn: sqlite3.Connection, repo_id: int, pr: dict) -> None:
             body = excluded.body,
             created_at = excluded.created_at,
             updated_at = excluded.updated_at,
+            -- a new head commit invalidates the cached checks rollup
+            checks_status = CASE WHEN pulls.head_sha IS excluded.head_sha
+                                 THEN pulls.checks_status ELSE NULL END,
+            checks_synced_at = CASE WHEN pulls.head_sha IS excluded.head_sha
+                                    THEN pulls.checks_synced_at ELSE NULL END,
+            head_sha = excluded.head_sha,
             synced_at = datetime('now')
         """,
         (
@@ -159,7 +174,17 @@ def upsert_pull(conn: sqlite3.Connection, repo_id: int, pr: dict) -> None:
             pr["body"],
             pr["created_at"],
             pr["updated_at"],
+            pr.get("head_sha"),
         ),
+    )
+
+
+def set_checks(conn: sqlite3.Connection, pull_id: int, status: str) -> None:
+    """Cache the CI checks rollup for a PR."""
+    conn.execute(
+        "UPDATE pulls SET checks_status = ?, checks_synced_at = datetime('now') "
+        "WHERE id = ?",
+        (status, pull_id),
     )
 
 

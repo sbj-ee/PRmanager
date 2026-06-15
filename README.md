@@ -17,7 +17,8 @@ review status, notes, and tags.
   status**, free-form **notes**, and **tags** — all stored locally.
 - **Triage view** for maintainers: `prm triage` shows the review queue (open,
   non-draft, unreviewed PRs, oldest first), and `prm list --needs-review`
-  filters to the same set.
+  filters to the same set. `prm triage --checks` adds each PR's **CI status**
+  (✓ pass / ✗ fail / ● running / — none), cached for instant later views.
 - **Write-back**: post real reviews to GitHub (approve / request changes /
   comment) with a confirmation prompt.
 - Open any PR in your browser straight from the terminal.
@@ -63,6 +64,7 @@ prm list --mine                    # only PRs you authored
 prm list --needs-review            # open, non-draft, not yet reviewed
 
 prm triage                         # maintainer review queue, oldest first
+prm triage --checks                # ...with CI status per PR (fetched + cached)
 prm triage --repo owner/name       # ...scoped to one repo
 prm triage --include-mine          # include your own PRs (excluded by default)
 

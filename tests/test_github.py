@@ -145,6 +145,53 @@ def test_rate_limit_message():
     assert "rate limit" in str(exc.value).lower()
 
 
+def _checks_client(status_json, checkruns_json):
+    client = GitHubClient("tok")
+
+    class FakeSession:
+        def get(self, url, params=None, timeout=None):
+            if url.endswith("/status"):
+                return FakeResp(json_data=status_json)
+            if url.endswith("/check-runs"):
+                return FakeResp(json_data=checkruns_json)
+            return FakeResp(json_data={})
+
+    client.session = FakeSession()
+    return client
+
+
+def _run(status, conclusion="success"):
+    return {"status": status, "conclusion": conclusion}
+
+
+@pytest.mark.parametrize(
+    "status_json,runs,expected",
+    [
+        ({"total_count": 0, "state": "pending"}, [], "none"),
+        ({"total_count": 0}, [_run("completed", "success")], "success"),
+        ({"total_count": 0}, [_run("completed", "success"),
+                              _run("completed", "failure")], "failure"),
+        ({"total_count": 0}, [_run("in_progress", None)], "pending"),
+        ({"total_count": 2, "state": "failure"}, [], "failure"),
+        ({"total_count": 1, "state": "success"},
+         [_run("completed", "success")], "success"),
+        # neutral/skipped don't count
+        ({"total_count": 0}, [_run("completed", "skipped"),
+                              _run("completed", "neutral")], "none"),
+        ({"total_count": 0}, [_run("completed", "timed_out")], "failure"),
+    ],
+)
+def test_checks_status_rollup(status_json, runs, expected):
+    client = _checks_client(status_json, {"check_runs": runs})
+    assert client.checks_status("o", "r", "sha") == expected
+
+
+def test_normalize_extracts_head_sha():
+    raw = _raw_pr(1)
+    raw["head"] = {"sha": "abc123"}
+    assert GitHubClient._normalize(raw)["head_sha"] == "abc123"
+
+
 def test_current_user():
     client = GitHubClient("tok")
 

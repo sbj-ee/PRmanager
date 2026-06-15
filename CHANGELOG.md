@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`prm triage --checks`** — fetches each queued PR's **CI checks rollup** from
+  GitHub (combining commit statuses and check runs) and shows it as a column
+  (✓ pass / ✗ fail / ● running / — none). Results are cached per head commit, so
+  a plain `prm triage` shows the last-known CI without API calls; the cache is
+  invalidated when a PR's head commit changes. Sync now stores each PR's head
+  SHA (run `prm sync --full` once to backfill existing data).
+
 ## [0.3.0] - 2026-06-14
 
 ### Added

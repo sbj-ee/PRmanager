@@ -239,6 +239,43 @@ def test_triage_excludes_own_prs_by_default(monkeypatch):
     assert "Triage queue (2)" in res_all.stdout
 
 
+def test_triage_checks_fetches_and_caches(monkeypatch):
+    with db.connect() as conn:
+        rid = db.add_repo(conn, "o", "r")
+        db.upsert_pull(conn, rid, make_pr(1, head_sha="good"))
+        db.upsert_pull(conn, rid, make_pr(2, head_sha="bad"))
+
+    class FakeClient:
+        def __init__(self, token):
+            pass
+
+        def checks_status(self, owner, name, sha):
+            return "success" if sha == "good" else "failure"
+
+    monkeypatch.setattr(cli, "GitHubClient", FakeClient)
+    monkeypatch.setattr(config, "resolve_token", lambda: "tok")
+
+    res = run("triage", "--checks")
+    assert res.exit_code == 0
+    with db.connect() as conn:
+        assert db.find_pull(conn, 1)[0]["checks_status"] == "success"
+        assert db.find_pull(conn, 2)[0]["checks_status"] == "failure"
+
+
+def test_checks_invalidated_on_new_head_sha():
+    with db.connect() as conn:
+        rid = db.add_repo(conn, "o", "r")
+        db.upsert_pull(conn, rid, make_pr(1, head_sha="sha1"))
+        pid = db.find_pull(conn, 1)[0]["id"]
+        db.set_checks(conn, pid, "success")
+        # same sha re-sync keeps the cached rollup
+        db.upsert_pull(conn, rid, make_pr(1, head_sha="sha1", title="edited"))
+        assert db.find_pull(conn, 1)[0]["checks_status"] == "success"
+        # new head commit clears it
+        db.upsert_pull(conn, rid, make_pr(1, head_sha="sha2"))
+        assert db.find_pull(conn, 1)[0]["checks_status"] is None
+
+
 def test_triage_empty_message():
     with db.connect() as conn:
         db.add_repo(conn, "o", "r")
