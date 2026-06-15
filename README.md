@@ -2,34 +2,45 @@
 
 [![CI](https://github.com/sbj-ee/PRmanager/actions/workflows/ci.yml/badge.svg)](https://github.com/sbj-ee/PRmanager/actions/workflows/ci.yml)
 
-A command-line manager for **GitHub pull requests**, backed by a local **SQLite**
-database. Track repositories, sync their PRs offline, and layer on your own
-review status, notes, and tags.
+A command-line **GitHub pull-request manager**, backed by a local **SQLite**
+database. Track your repos, sync their PRs offline, triage what needs your
+review, post reviews back to GitHub, and layer on local-only notes and tags —
+all from the terminal or an interactive shell.
+
+## Quick start
+
+```bash
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e .
+
+prm track octocat/Hello-World   # track a repo (or several)
+prm sync                        # pull its PRs into local SQLite
+prm triage                      # see what needs review
+prm                             # ...or drop into the interactive shell
+```
 
 ## Features
 
 - Track any number of GitHub repos and **incrementally sync** their PRs into
   local SQLite — after the first sync, only updated PRs are fetched.
-- List and filter PRs by repo, state, author, **label**, **assignee**, tag, or
-  review status — including case-insensitive **fuzzy author matching**
-  (`--author dependabot` matches `dependabot[bot]`) and `--mine` for your own
-  PRs. Labels and assignees are synced from GitHub and shown inline; `--label`
-  is repeatable to require multiple labels (AND).
-- Local-only workflow state that GitHub doesn't give you: a per-PR **review
-  status**, free-form **notes**, and **tags** — all stored locally.
-- **Triage view** for maintainers: `prm triage` shows the review queue (open,
-  non-draft, unreviewed PRs, oldest first), and `prm list --needs-review`
-  filters to the same set. `--requested` narrows to PRs where review was
-  actually requested from you (`--reviewer <login>` for a specific person). `prm triage --checks` adds each PR's **CI status**
-  (✓ pass / ✗ fail / ● running / — none), cached for instant later views.
+- Rich filtering on `prm list`: by repo, state, **author** (case-insensitive
+  substring — `--author dependabot` matches `dependabot[bot]`), **label**
+  (repeatable, ANDed), **assignee**, **requested reviewer**, tag, or review
+  status, plus `--mine` and `--needs-review`.
+- **Maintainer triage** (`prm triage`): the review queue — open, non-draft,
+  unreviewed PRs, oldest first — with optional **CI status** (`--checks`:
+  ✓ pass / ✗ fail / ● running / — none, cached), and `--requested` to narrow to
+  PRs where review was actually requested from you.
+- Local-only workflow state GitHub doesn't give you: per-PR **review status**,
+  free-form **notes**, and **tags**.
 - **Write-back**: post real reviews to GitHub (approve / request changes /
   comment) with a confirmation prompt.
 - **Desktop notifications** (`prm notify`) when a new PR enters your review
-  queue — each PR announced once (via `notify-send`, falling back to `gdbus`).
-  PRs where review is requested from you are prioritized: announced first, at
-  higher urgency (`--requested-only` to notify about just those).
-- Open any PR in your browser straight from the terminal.
-- Works offline once synced; the database is the source of truth for browsing.
+  queue — announced once each, with review-requested PRs prioritized (first, at
+  higher urgency). Uses `notify-send`, falling back to `gdbus`.
+- **Interactive REPL** — run `prm` with no arguments for a `/`-command shell.
+- Labels, assignees, and requested reviewers are synced from GitHub and shown
+  inline; works fully offline once synced.
 
 ## Install
 
@@ -68,9 +79,9 @@ prm list                           # list all cached PRs
 prm list --repo octocat/Hello-World --state open
 prm list --author octocat --tag urgent --review pending
 prm list --label bug --assignee octocat   # filter by GitHub label / assignee
+prm list --label bug --label ready         # repeat --label to require ALL (AND)
 prm list --requested               # PRs where review is requested from you
 prm list --reviewer octocat        # ...or from a specific person
-prm list --label bug --label ready         # repeat --label to require ALL (AND)
 prm list --mine                    # only PRs you authored
 prm list --needs-review            # open, non-draft, not yet reviewed
 
@@ -85,7 +96,7 @@ prm notify                         # desktop-notify about newly-arrived review P
 prm notify --requested-only        # only PRs where review is requested from you
 prm notify --seed                  # mark the current queue seen, without notifying
 
-prm show 42                        # full details + notes + tags
+prm show 42                        # full details + labels + assignees + notes
 prm note 42 "needs a test for the edge case"
 prm tag 42 urgent
 prm tag 42 urgent --remove
@@ -100,6 +111,48 @@ prm submit 42 comment -b "looks reasonable" --yes
 
 When a PR number exists in more than one tracked repo, disambiguate with
 `--repo owner/name`.
+
+## Interactive shell
+
+Run `prm` with no arguments (or `prm shell`) to enter a REPL where every command
+is the same, entered with a leading `/`:
+
+```
+prm> /triage --requested
+prm> /show 42
+prm> /submit 42 approve
+prm> /help
+prm> /quit
+```
+
+Add `--help` to any command for its options (e.g. `/list --help`).
+
+## Automating sync
+
+Keep the local database fresh — and get notified about new review PRs —
+with a cron job. Because the DB and your `gh` auth are local, the schedule must
+run on your own machine. A small wrapper gives cron a usable `PATH` and a
+desktop session for notifications:
+
+```bash
+#!/usr/bin/env bash
+# ~/.local/share/prmanager/sync.sh
+export PATH="/usr/bin:/bin:/usr/local/bin:$PATH"
+export DISPLAY="${DISPLAY:-:0}"
+export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=/run/user/$(id -u)/bus}"
+
+prm sync --state all          # pull new/changed PRs
+prm triage --checks           # warm the CI-status cache
+prm notify                    # desktop-notify new review PRs (requested ones first)
+```
+
+```cron
+# crontab -e — run hourly at :17
+17 * * * * /home/you/.local/share/prmanager/sync.sh >> ~/.local/share/prmanager/sync.log 2>&1
+```
+
+Run `prm notify --seed` once first to baseline the current queue so you only get
+notified about genuinely new PRs.
 
 ## Shell completion
 
