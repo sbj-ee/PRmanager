@@ -35,6 +35,8 @@ CREATE TABLE IF NOT EXISTS pulls (
     created_at    TEXT,
     updated_at    TEXT,
     head_sha      TEXT,             -- head commit, used to look up CI checks
+    labels        TEXT,             -- comma-joined GitHub label names
+    assignees     TEXT,             -- comma-joined assignee logins
     -- cached CI checks rollup: success / failure / pending / none
     checks_status   TEXT,
     checks_synced_at TEXT,
@@ -86,7 +88,9 @@ def _migrate(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE repos ADD COLUMN last_sync_state TEXT")
 
     pull_cols = {row["name"] for row in conn.execute("PRAGMA table_info(pulls)")}
-    for col in ("head_sha", "checks_status", "checks_synced_at"):
+    for col in (
+        "head_sha", "checks_status", "checks_synced_at", "labels", "assignees",
+    ):
         if col not in pull_cols:
             conn.execute(f"ALTER TABLE pulls ADD COLUMN {col} TEXT")
 
@@ -142,8 +146,8 @@ def upsert_pull(conn: sqlite3.Connection, repo_id: int, pr: dict) -> None:
         """
         INSERT INTO pulls
             (repo_id, number, title, author, state, merged, draft, url, body,
-             created_at, updated_at, head_sha, synced_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+             created_at, updated_at, head_sha, labels, assignees, synced_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
         ON CONFLICT (repo_id, number) DO UPDATE SET
             title = excluded.title,
             author = excluded.author,
@@ -154,6 +158,8 @@ def upsert_pull(conn: sqlite3.Connection, repo_id: int, pr: dict) -> None:
             body = excluded.body,
             created_at = excluded.created_at,
             updated_at = excluded.updated_at,
+            labels = excluded.labels,
+            assignees = excluded.assignees,
             -- a new head commit invalidates the cached checks rollup
             checks_status = CASE WHEN pulls.head_sha IS excluded.head_sha
                                  THEN pulls.checks_status ELSE NULL END,
@@ -175,6 +181,8 @@ def upsert_pull(conn: sqlite3.Connection, repo_id: int, pr: dict) -> None:
             pr["created_at"],
             pr["updated_at"],
             pr.get("head_sha"),
+            pr.get("labels"),
+            pr.get("assignees"),
         ),
     )
 
@@ -247,6 +255,17 @@ def query_pulls(
             "p.id IN (SELECT pull_id FROM tags WHERE tag = ?)"
         )
         params.append(filters["tag"])
+    if filters.get("label"):
+        # case-insensitive exact membership in the comma-joined labels
+        where.append(
+            "instr(lower(',' || COALESCE(p.labels,'') || ','), lower(?)) > 0"
+        )
+        params.append(f",{filters['label']},")
+    if filters.get("assignee"):
+        where.append(
+            "instr(lower(',' || COALESCE(p.assignees,'') || ','), lower(?)) > 0"
+        )
+        params.append(f",{filters['assignee']},")
 
     clause = ("WHERE " + " AND ".join(where)) if where else ""
     sql = f"""

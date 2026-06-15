@@ -10,9 +10,10 @@ review status, notes, and tags.
 
 - Track any number of GitHub repos and **incrementally sync** their PRs into
   local SQLite — after the first sync, only updated PRs are fetched.
-- List and filter PRs by repo, state, author, tag, or review status — including
-  case-insensitive **fuzzy author matching** (`--author dependabot` matches
-  `dependabot[bot]`) and `--mine` for your own PRs.
+- List and filter PRs by repo, state, author, **label**, **assignee**, tag, or
+  review status — including case-insensitive **fuzzy author matching**
+  (`--author dependabot` matches `dependabot[bot]`) and `--mine` for your own
+  PRs. Labels and assignees are synced from GitHub and shown inline.
 - Local-only workflow state that GitHub doesn't give you: a per-PR **review
   status**, free-form **notes**, and **tags** — all stored locally.
 - **Triage view** for maintainers: `prm triage` shows the review queue (open,
@@ -60,11 +61,13 @@ prm repos                          # list tracked repos (+ last-synced time)
 prm list                           # list all cached PRs
 prm list --repo octocat/Hello-World --state open
 prm list --author octocat --tag urgent --review pending
+prm list --label bug --assignee octocat   # filter by GitHub label / assignee
 prm list --mine                    # only PRs you authored
 prm list --needs-review            # open, non-draft, not yet reviewed
 
 prm triage                         # maintainer review queue, oldest first
 prm triage --checks                # ...with CI status per PR (fetched + cached)
+prm triage --label bug             # ...only PRs with a given label
 prm triage --repo owner/name       # ...scoped to one repo
 prm triage --include-mine          # include your own PRs (excluded by default)
 

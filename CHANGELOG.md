@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Labels and assignees.** Sync now stores each PR's GitHub labels and
+  assignees. Labels render inline in `list`/`triage`, and `show` lists both.
+  Filter with `prm list --label <name>` / `--assignee <login>` and
+  `prm triage --label <name>` (case-insensitive, exact-token match). Run
+  `prm sync --full` once to backfill existing data.
+
 ## [0.4.0] - 2026-06-14
 
 ### Added

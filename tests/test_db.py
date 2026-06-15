@@ -78,6 +78,23 @@ def test_query_pulls_order():
     assert [r["number"] for r in oldest_first] == [2, 3, 1]
 
 
+def test_query_pulls_label_and_assignee():
+    with db.connect() as conn:
+        rid = db.add_repo(conn, "o", "r")
+        db.upsert_pull(conn, rid, make_pr(1, labels="bug,go", assignees="alice"))
+        db.upsert_pull(conn, rid, make_pr(2, labels="golang", assignees="bob"))
+        db.upsert_pull(conn, rid, make_pr(3))
+
+        # exact-token membership: "go" must not match "golang"
+        assert [r["number"] for r in db.query_pulls(conn, {"label": "go"})] == [1]
+        assert [r["number"] for r in db.query_pulls(conn, {"label": "golang"})] == [2]
+        # case-insensitive
+        assert len(db.query_pulls(conn, {"label": "GO"})) == 1
+        # assignee membership
+        assert [r["number"] for r in db.query_pulls(conn, {"assignee": "alice"})] == [1]
+        assert len(db.query_pulls(conn, {"assignee": "ALICE"})) == 1
+
+
 def test_notes_and_tags():
     with db.connect() as conn:
         rid = db.add_repo(conn, "o", "r")

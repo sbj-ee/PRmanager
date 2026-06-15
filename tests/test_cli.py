@@ -85,6 +85,34 @@ def test_renders_markup_like_content_without_crashing():
     assert "[section]" in res_show.stdout
 
 
+def test_list_label_and_assignee_filters():
+    with db.connect() as conn:
+        rid = db.add_repo(conn, "o", "r")
+        db.upsert_pull(conn, rid, make_pr(1, labels="bug,go", assignees="alice"))
+        db.upsert_pull(conn, rid, make_pr(2, labels="docs", assignees="bob"))
+    assert "Pull requests (1)" in run("list", "--label", "go").stdout
+    assert "Pull requests (1)" in run("list", "--assignee", "alice").stdout
+
+
+def test_triage_label_filter():
+    with db.connect() as conn:
+        rid = db.add_repo(conn, "o", "r")
+        db.upsert_pull(conn, rid, make_pr(1, labels="ready"))
+        db.upsert_pull(conn, rid, make_pr(2, labels="wip"))
+    res = run("triage", "--label", "ready")
+    assert "Triage queue (1)" in res.stdout
+
+
+def test_show_displays_labels_and_assignees():
+    with db.connect() as conn:
+        rid = db.add_repo(conn, "o", "r")
+        db.upsert_pull(conn, rid, make_pr(1, labels="bug,go", assignees="alice,bob"))
+    res = run("show", "1")
+    assert res.exit_code == 0
+    assert "labels:" in res.stdout and "bug, go" in res.stdout
+    assert "assignees:" in res.stdout and "alice, bob" in res.stdout
+
+
 def test_review_rejects_bad_status():
     seed()
     res = run("review", "1", "bogus")

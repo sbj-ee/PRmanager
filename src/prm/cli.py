@@ -261,6 +261,12 @@ def list_prs(
         False, "--mine", help="Only PRs you authored (the authenticated user)."
     ),
     tag: Optional[str] = typer.Option(None, "--tag", "-T"),
+    label: Optional[str] = typer.Option(
+        None, "--label", "-l", help="Filter by GitHub label."
+    ),
+    assignee: Optional[str] = typer.Option(
+        None, "--assignee", help="Filter by assignee login."
+    ),
     review: Optional[str] = typer.Option(
         None, "--review", help=f"Review status: {', '.join(REVIEW_STATES)}."
     ),
@@ -282,6 +288,8 @@ def list_prs(
         "state": state,
         "author": author,  # substring match
         "tag": tag,
+        "label": label,
+        "assignee": assignee,
         "review_status": review,
     }
     if needs_review:
@@ -329,6 +337,8 @@ def _render_pr_table(
         title_cell = escape(r["title"] or "")
         if r["draft"]:
             title_cell = f"[dim](draft)[/] {title_cell}"
+        if r["labels"]:
+            title_cell += f" [dim]\\[{escape(r['labels'])}][/]"
         if r["note_count"]:
             title_cell += f" [dim]📝{r['note_count']}[/]"
         review_status = r["review_status"] or "pending"
@@ -356,6 +366,9 @@ def _render_pr_table(
 @app.command()
 def triage(
     repo: Optional[str] = typer.Option(None, "--repo", "-r", help="Filter by repo."),
+    label: Optional[str] = typer.Option(
+        None, "--label", "-l", help="Only PRs with this GitHub label."
+    ),
     include_mine: bool = typer.Option(
         False, "--include-mine", help="Include PRs you authored (excluded by default)."
     ),
@@ -374,6 +387,7 @@ def triage(
         "state": "open",
         "review_status": "pending",
         "draft": False,
+        "label": label,
     }
     mine = None if include_mine else config.cached_login()
 
@@ -445,6 +459,10 @@ def show(
         f"[dim]{pr['url']}[/]\n"
         f"[dim]created {pr['created_at']} · updated {pr['updated_at']}[/]"
     )
+    if pr["labels"]:
+        meta += f"\nlabels: [yellow]{escape(pr['labels'].replace(',', ', '))}[/]"
+    if pr["assignees"]:
+        meta += f"\nassignees: [green]{escape(pr['assignees'].replace(',', ', '))}[/]"
     if tags:
         meta += f"\ntags: [blue]{escape(', '.join(tags))}[/]"
     console.print(Panel(meta, title=header, expand=False))

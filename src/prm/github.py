@@ -126,6 +126,12 @@ class GitHubClient:
             "created_at": pr.get("created_at"),
             "updated_at": pr.get("updated_at"),
             "head_sha": (pr.get("head") or {}).get("sha"),
+            "labels": ",".join(
+                lbl["name"] for lbl in (pr.get("labels") or []) if lbl.get("name")
+            ),
+            "assignees": ",".join(
+                a["login"] for a in (pr.get("assignees") or []) if a.get("login")
+            ),
         }
 
     # Check conclusions that count as a hard failure.
