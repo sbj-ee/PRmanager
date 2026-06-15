@@ -104,6 +104,44 @@ def test_list_multi_label_is_anded():
     assert "No matching PRs" in res.stdout
 
 
+def test_list_reviewer_and_requested_filters(monkeypatch):
+    with db.connect() as conn:
+        rid = db.add_repo(conn, "o", "r")
+        db.upsert_pull(conn, rid, make_pr(1, requested_reviewers="sbj-ee,carol"))
+        db.upsert_pull(conn, rid, make_pr(2, requested_reviewers="dave"))
+    # explicit reviewer (exact-token membership)
+    assert "Pull requests (1)" in run("list", "--reviewer", "carol").stdout
+    # --requested resolves to your login
+    monkeypatch.setattr(cli, "_resolve_login", lambda: "sbj-ee")
+    res = run("list", "--requested")
+    assert "Pull requests (1)" in res.stdout  # only PR 1 requests sbj-ee
+
+
+def test_list_requested_conflicts_with_reviewer():
+    res = run("list", "--requested", "--reviewer", "x")
+    assert res.exit_code == 1
+    assert "not both" in text(res)
+
+
+def test_triage_requested_filter(monkeypatch):
+    with db.connect() as conn:
+        rid = db.add_repo(conn, "o", "r")
+        db.upsert_pull(conn, rid, make_pr(1, author="c1", requested_reviewers="sbj-ee"))
+        db.upsert_pull(conn, rid, make_pr(2, author="c2", requested_reviewers="other"))
+    monkeypatch.setattr(cli, "_resolve_login", lambda: "sbj-ee")
+    res = run("triage", "--requested")
+    assert "Triage queue (1)" in res.stdout
+
+
+def test_show_displays_requested_reviewers():
+    with db.connect() as conn:
+        rid = db.add_repo(conn, "o", "r")
+        db.upsert_pull(conn, rid, make_pr(1, requested_reviewers="alice,bob"))
+    res = run("show", "1")
+    assert "review requested from:" in res.stdout
+    assert "alice, bob" in res.stdout
+
+
 def test_triage_label_filter():
     with db.connect() as conn:
         rid = db.add_repo(conn, "o", "r")

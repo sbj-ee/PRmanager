@@ -132,6 +132,11 @@ class GitHubClient:
             "assignees": ",".join(
                 a["login"] for a in (pr.get("assignees") or []) if a.get("login")
             ),
+            "requested_reviewers": ",".join(
+                u["login"]
+                for u in (pr.get("requested_reviewers") or [])
+                if u.get("login")
+            ),
         }
 
     # Check conclusions that count as a hard failure.

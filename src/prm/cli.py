@@ -298,6 +298,12 @@ def list_prs(
     assignee: Optional[str] = typer.Option(
         None, "--assignee", help="Filter by assignee login."
     ),
+    reviewer: Optional[str] = typer.Option(
+        None, "--reviewer", help="Filter to PRs where this login is a requested reviewer."
+    ),
+    requested: bool = typer.Option(
+        False, "--requested", help="Only PRs where review is requested from you."
+    ),
     review: Optional[str] = typer.Option(
         None, "--review", help=f"Review status: {', '.join(REVIEW_STATES)}."
     ),
@@ -313,6 +319,8 @@ def list_prs(
     """List cached pull requests with optional filters."""
     if mine and author:
         _fail("use either --mine or --author, not both.")
+    if requested and reviewer:
+        _fail("use either --requested or --reviewer, not both.")
 
     filters: dict = {
         "repo": repo,
@@ -321,6 +329,7 @@ def list_prs(
         "tag": tag,
         "labels": label,
         "assignee": assignee,
+        "requested_reviewer": _resolve_login() if requested else reviewer,
         "review_status": review,
     }
     if needs_review:
@@ -400,6 +409,9 @@ def triage(
     label: Optional[List[str]] = typer.Option(
         None, "--label", "-l", help="Only PRs with these GitHub labels (repeatable; ANDed)."
     ),
+    requested: bool = typer.Option(
+        False, "--requested", help="Only PRs where review is requested from you."
+    ),
     include_mine: bool = typer.Option(
         False, "--include-mine", help="Include PRs you authored (excluded by default)."
     ),
@@ -419,6 +431,7 @@ def triage(
         "review_status": "pending",
         "draft": False,
         "labels": label,
+        "requested_reviewer": _resolve_login() if requested else None,
     }
     mine = None if include_mine else config.cached_login()
 
@@ -547,6 +560,11 @@ def show(
         meta += f"\nlabels: [yellow]{escape(pr['labels'].replace(',', ', '))}[/]"
     if pr["assignees"]:
         meta += f"\nassignees: [green]{escape(pr['assignees'].replace(',', ', '))}[/]"
+    if pr["requested_reviewers"]:
+        meta += (
+            "\nreview requested from: "
+            f"[cyan]{escape(pr['requested_reviewers'].replace(',', ', '))}[/]"
+        )
     if tags:
         meta += f"\ntags: [blue]{escape(', '.join(tags))}[/]"
     console.print(Panel(meta, title=header, expand=False))

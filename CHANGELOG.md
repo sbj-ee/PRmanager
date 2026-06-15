@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Review-requested detection.** Sync now stores each PR's requested
+  reviewers. New `--requested` flag (on `prm list` and `prm triage`) narrows to
+  PRs where review is requested from *you*; `prm list --reviewer <login>`
+  filters by a specific requested reviewer. `prm show` lists requested
+  reviewers. Run `prm sync --full` once to backfill existing data.
+
 ## [0.7.0] - 2026-06-14
 
 ### Added

@@ -19,7 +19,8 @@ review status, notes, and tags.
   status**, free-form **notes**, and **tags** — all stored locally.
 - **Triage view** for maintainers: `prm triage` shows the review queue (open,
   non-draft, unreviewed PRs, oldest first), and `prm list --needs-review`
-  filters to the same set. `prm triage --checks` adds each PR's **CI status**
+  filters to the same set. `--requested` narrows to PRs where review was
+  actually requested from you (`--reviewer <login>` for a specific person). `prm triage --checks` adds each PR's **CI status**
   (✓ pass / ✗ fail / ● running / — none), cached for instant later views.
 - **Write-back**: post real reviews to GitHub (approve / request changes /
   comment) with a confirmation prompt.
@@ -65,6 +66,8 @@ prm list                           # list all cached PRs
 prm list --repo octocat/Hello-World --state open
 prm list --author octocat --tag urgent --review pending
 prm list --label bug --assignee octocat   # filter by GitHub label / assignee
+prm list --requested               # PRs where review is requested from you
+prm list --reviewer octocat        # ...or from a specific person
 prm list --label bug --label ready         # repeat --label to require ALL (AND)
 prm list --mine                    # only PRs you authored
 prm list --needs-review            # open, non-draft, not yet reviewed
@@ -72,6 +75,7 @@ prm list --needs-review            # open, non-draft, not yet reviewed
 prm triage                         # maintainer review queue, oldest first
 prm triage --checks                # ...with CI status per PR (fetched + cached)
 prm triage --label bug             # ...only PRs with a given label
+prm triage --requested             # ...only PRs where review is requested from you
 prm triage --repo owner/name       # ...scoped to one repo
 prm triage --include-mine          # include your own PRs (excluded by default)
 
