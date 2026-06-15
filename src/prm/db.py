@@ -255,12 +255,12 @@ def query_pulls(
             "p.id IN (SELECT pull_id FROM tags WHERE tag = ?)"
         )
         params.append(filters["tag"])
-    if filters.get("label"):
-        # case-insensitive exact membership in the comma-joined labels
+    for lbl in filters.get("labels") or []:
+        # case-insensitive exact membership; repeating ANDs the labels together
         where.append(
             "instr(lower(',' || COALESCE(p.labels,'') || ','), lower(?)) > 0"
         )
-        params.append(f",{filters['label']},")
+        params.append(f",{lbl},")
     if filters.get("assignee"):
         where.append(
             "instr(lower(',' || COALESCE(p.assignees,'') || ','), lower(?)) > 0"

@@ -94,6 +94,16 @@ def test_list_label_and_assignee_filters():
     assert "Pull requests (1)" in run("list", "--assignee", "alice").stdout
 
 
+def test_list_multi_label_is_anded():
+    with db.connect() as conn:
+        rid = db.add_repo(conn, "o", "r")
+        db.upsert_pull(conn, rid, make_pr(1, labels="bug,go"))
+        db.upsert_pull(conn, rid, make_pr(2, labels="bug"))
+    assert "Pull requests (1)" in run("list", "--label", "bug", "--label", "go").stdout
+    res = run("list", "--label", "bug", "--label", "missing")
+    assert "No matching PRs" in res.stdout
+
+
 def test_triage_label_filter():
     with db.connect() as conn:
         rid = db.add_repo(conn, "o", "r")

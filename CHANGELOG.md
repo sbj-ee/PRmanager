@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Multi-label filtering.** `--label` is now repeatable on `prm list` and
+  `prm triage`; passing it multiple times requires a PR to have *all* the given
+  labels (AND), e.g. `prm list --label bug --label ready-for-review`.
+
 ## [0.5.0] - 2026-06-14
 
 ### Added

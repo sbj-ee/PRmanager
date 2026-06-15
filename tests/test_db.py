@@ -86,10 +86,13 @@ def test_query_pulls_label_and_assignee():
         db.upsert_pull(conn, rid, make_pr(3))
 
         # exact-token membership: "go" must not match "golang"
-        assert [r["number"] for r in db.query_pulls(conn, {"label": "go"})] == [1]
-        assert [r["number"] for r in db.query_pulls(conn, {"label": "golang"})] == [2]
+        assert [r["number"] for r in db.query_pulls(conn, {"labels": ["go"]})] == [1]
+        assert [r["number"] for r in db.query_pulls(conn, {"labels": ["golang"]})] == [2]
         # case-insensitive
-        assert len(db.query_pulls(conn, {"label": "GO"})) == 1
+        assert len(db.query_pulls(conn, {"labels": ["GO"]})) == 1
+        # multiple labels are ANDed
+        assert [r["number"] for r in db.query_pulls(conn, {"labels": ["bug", "go"]})] == [1]
+        assert db.query_pulls(conn, {"labels": ["bug", "docs"]}) == []
         # assignee membership
         assert [r["number"] for r in db.query_pulls(conn, {"assignee": "alice"})] == [1]
         assert len(db.query_pulls(conn, {"assignee": "ALICE"})) == 1

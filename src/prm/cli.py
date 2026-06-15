@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import webbrowser
 from datetime import datetime, timezone
-from typing import Optional
+from typing import List, Optional
 
 import typer
 from rich.console import Console
@@ -261,8 +261,8 @@ def list_prs(
         False, "--mine", help="Only PRs you authored (the authenticated user)."
     ),
     tag: Optional[str] = typer.Option(None, "--tag", "-T"),
-    label: Optional[str] = typer.Option(
-        None, "--label", "-l", help="Filter by GitHub label."
+    label: Optional[List[str]] = typer.Option(
+        None, "--label", "-l", help="Filter by GitHub label (repeatable; ANDed)."
     ),
     assignee: Optional[str] = typer.Option(
         None, "--assignee", help="Filter by assignee login."
@@ -288,7 +288,7 @@ def list_prs(
         "state": state,
         "author": author,  # substring match
         "tag": tag,
-        "label": label,
+        "labels": label,
         "assignee": assignee,
         "review_status": review,
     }
@@ -366,8 +366,8 @@ def _render_pr_table(
 @app.command()
 def triage(
     repo: Optional[str] = typer.Option(None, "--repo", "-r", help="Filter by repo."),
-    label: Optional[str] = typer.Option(
-        None, "--label", "-l", help="Only PRs with this GitHub label."
+    label: Optional[List[str]] = typer.Option(
+        None, "--label", "-l", help="Only PRs with these GitHub labels (repeatable; ANDed)."
     ),
     include_mine: bool = typer.Option(
         False, "--include-mine", help="Include PRs you authored (excluded by default)."
@@ -387,7 +387,7 @@ def triage(
         "state": "open",
         "review_status": "pending",
         "draft": False,
-        "label": label,
+        "labels": label,
     }
     mine = None if include_mine else config.cached_login()
 

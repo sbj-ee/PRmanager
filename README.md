@@ -13,7 +13,8 @@ review status, notes, and tags.
 - List and filter PRs by repo, state, author, **label**, **assignee**, tag, or
   review status — including case-insensitive **fuzzy author matching**
   (`--author dependabot` matches `dependabot[bot]`) and `--mine` for your own
-  PRs. Labels and assignees are synced from GitHub and shown inline.
+  PRs. Labels and assignees are synced from GitHub and shown inline; `--label`
+  is repeatable to require multiple labels (AND).
 - Local-only workflow state that GitHub doesn't give you: a per-PR **review
   status**, free-form **notes**, and **tags** — all stored locally.
 - **Triage view** for maintainers: `prm triage` shows the review queue (open,
@@ -62,6 +63,7 @@ prm list                           # list all cached PRs
 prm list --repo octocat/Hello-World --state open
 prm list --author octocat --tag urgent --review pending
 prm list --label bug --assignee octocat   # filter by GitHub label / assignee
+prm list --label bug --label ready         # repeat --label to require ALL (AND)
 prm list --mine                    # only PRs you authored
 prm list --needs-review            # open, non-draft, not yet reviewed
 
