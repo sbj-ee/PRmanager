@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import shutil
+import subprocess
 import webbrowser
 from datetime import datetime, timezone
 from typing import List, Optional
@@ -40,6 +42,35 @@ CHECK_DISPLAY = {
 def _fail(msg: str) -> None:
     err.print(f"[bold red]error:[/] {msg}")
     raise typer.Exit(1)
+
+
+def _notify_desktop(title: str, body: str) -> bool:
+    """Post a desktop notification. Prefers notify-send, falls back to gdbus.
+    Returns True if a notifier ran."""
+    send = shutil.which("notify-send")
+    if send:
+        try:
+            subprocess.run(
+                [send, "-a", "prmanager", title, body], timeout=10, check=False
+            )
+            return True
+        except (OSError, subprocess.SubprocessError):
+            return False
+    gdbus = shutil.which("gdbus")
+    if gdbus:
+        try:
+            subprocess.run(
+                [gdbus, "call", "--session",
+                 "--dest", "org.freedesktop.Notifications",
+                 "--object-path", "/org/freedesktop/Notifications",
+                 "--method", "org.freedesktop.Notifications.Notify",
+                 "prmanager", "0", "", title, body, "[]", "{}", "5000"],
+                timeout=10, check=False, stdout=subprocess.DEVNULL,
+            )
+            return True
+        except (OSError, subprocess.SubprocessError):
+            return False
+    return False
 
 
 def _age(iso: Optional[str]) -> str:
@@ -414,6 +445,59 @@ def triage(
         show_age=True,
         show_checks=True,
     )
+
+
+@app.command()
+def notify(
+    repo: Optional[str] = typer.Option(None, "--repo", "-r", help="Limit to one repo."),
+    seed: bool = typer.Option(
+        False,
+        "--seed",
+        help="Mark current review-queue PRs as seen WITHOUT notifying (baseline).",
+    ),
+) -> None:
+    """Desktop-notify about PRs that have newly entered the review queue.
+
+    Considers open, non-draft, unreviewed PRs you didn't author. Each PR is
+    announced once; --seed silently marks the current queue as seen so a later
+    run only notifies about genuinely new arrivals.
+    """
+    filters: dict = {
+        "repo": repo,
+        "state": "open",
+        "review_status": "pending",
+        "draft": False,
+    }
+    mine = config.cached_login()
+    with db.connect() as conn:
+        rows = db.query_pulls(conn, filters)
+        fresh = [
+            r
+            for r in rows
+            if r["notified_at"] is None and (not mine or (r["author"] or "") != mine)
+        ]
+        if not fresh:
+            console.print("[dim]No new PRs needing review.[/]")
+            return
+
+        sent = 0
+        for r in fresh:
+            if not seed:
+                title = "PR needs review"
+                body = f"{r['repo']}#{r['number']}: {r['title'] or ''}\nby {r['author'] or '?'}"
+                if _notify_desktop(title, body):
+                    sent += 1
+            db.mark_notified(conn, r["id"])
+
+    if seed:
+        console.print(f"[green]Baselined {len(fresh)} PR(s)[/] as seen (no notifications).")
+    elif sent:
+        console.print(f"[green]Sent {sent} desktop notification(s).[/]")
+    else:
+        console.print(
+            f"[yellow]{len(fresh)} new PR(s) need review, but no desktop notifier "
+            f"was available[/] (install libnotify-bin for notify-send)."
+        )
 
 
 def _refresh_checks(conn, rows) -> None:

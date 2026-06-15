@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`prm notify`** — sends a desktop notification for PRs that have newly
+  entered the review queue (open, non-draft, unreviewed, not authored by you).
+  Each PR is announced once (tracked via a `notified_at` column); `--seed`
+  baselines the current queue silently. Uses `notify-send`, falling back to
+  `gdbus` over D-Bus.
+
 ## [0.6.0] - 2026-06-14
 
 ### Added

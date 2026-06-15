@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS pulls (
     checks_synced_at TEXT,
     -- local-only fields:
     review_status TEXT DEFAULT 'pending',  -- pending/approved/changes/commented
+    notified_at   TEXT,             -- when a desktop notification was sent
     synced_at     TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE (repo_id, number)
 );
@@ -90,6 +91,7 @@ def _migrate(conn: sqlite3.Connection) -> None:
     pull_cols = {row["name"] for row in conn.execute("PRAGMA table_info(pulls)")}
     for col in (
         "head_sha", "checks_status", "checks_synced_at", "labels", "assignees",
+        "notified_at",
     ):
         if col not in pull_cols:
             conn.execute(f"ALTER TABLE pulls ADD COLUMN {col} TEXT")
@@ -184,6 +186,13 @@ def upsert_pull(conn: sqlite3.Connection, repo_id: int, pr: dict) -> None:
             pr.get("labels"),
             pr.get("assignees"),
         ),
+    )
+
+
+def mark_notified(conn: sqlite3.Connection, pull_id: int) -> None:
+    """Record that a desktop notification was sent for this PR."""
+    conn.execute(
+        "UPDATE pulls SET notified_at = datetime('now') WHERE id = ?", (pull_id,)
     )
 
 

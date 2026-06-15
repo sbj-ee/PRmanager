@@ -23,6 +23,8 @@ review status, notes, and tags.
   (✓ pass / ✗ fail / ● running / — none), cached for instant later views.
 - **Write-back**: post real reviews to GitHub (approve / request changes /
   comment) with a confirmation prompt.
+- **Desktop notifications** (`prm notify`) when a new PR enters your review
+  queue — each PR announced once (via `notify-send`, falling back to `gdbus`).
 - Open any PR in your browser straight from the terminal.
 - Works offline once synced; the database is the source of truth for browsing.
 
@@ -72,6 +74,9 @@ prm triage --checks                # ...with CI status per PR (fetched + cached)
 prm triage --label bug             # ...only PRs with a given label
 prm triage --repo owner/name       # ...scoped to one repo
 prm triage --include-mine          # include your own PRs (excluded by default)
+
+prm notify                         # desktop-notify about newly-arrived review PRs
+prm notify --seed                  # mark the current queue seen, without notifying
 
 prm show 42                        # full details + notes + tags
 prm note 42 "needs a test for the edge case"
